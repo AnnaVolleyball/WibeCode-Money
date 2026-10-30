@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 14;
+const APP_VERSION = 15;
 
 /* ================= Data ================= */
 
@@ -63,7 +63,7 @@ function defaultState() {
   const cat = (type, icon, name, color) => ({ id: uid(), type, icon, name, color });
   return {
     version: 1,
-    settings: { baseCurrency: 'USD', theme: 'auto', sortCatsByUse: true },
+    settings: { baseCurrency: 'USD', theme: 'auto', accent: 'blue', sortCatsByUse: true },
     // perUSD: сколько единиц валюты стоит 1 доллар (примерно, можно поменять в настройках)
     currencies: [
       { code: 'VND', name: 'Вьетнамский донг', symbol: '₫', decimals: 0, perUSD: 26300 },
@@ -314,6 +314,11 @@ function render() {
 
 function applyTheme() {
   const t = state.settings.theme;
+  if (state.settings.accent === 'orange') document.documentElement.setAttribute('data-accent', 'orange');
+  else document.documentElement.removeAttribute('data-accent');
+  // цвет строки состояния iPhone под фон приложения
+  const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+  document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.setAttribute('content', bg));
   if (t === 'auto') document.documentElement.removeAttribute('data-theme');
   else document.documentElement.setAttribute('data-theme', t);
 }
@@ -624,6 +629,8 @@ function renderSettings() {
       <select data-change="base-cur">${state.currencies.map(c => `<option value="${c.code}" ${c.code === base() ? 'selected' : ''}>${c.code} · ${esc(c.name)}</option>`).join('')}</select></div>
     <div class="field"><label>Порядок категорий</label>
       <select data-change="cat-sort"><option value="1" ${state.settings.sortCatsByUse ? 'selected' : ''}>Частые — впереди</option><option value="0" ${state.settings.sortCatsByUse ? '' : 'selected'}>Как в списке</option></select></div>
+    <div class="field"><label>Цвет</label>
+      <select data-change="accent">${[['blue', 'Голубой'], ['orange', 'Оранжевый']].map(([v, l]) => `<option value="${v}" ${(state.settings.accent || 'blue') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
     <div class="field"><label>Тема</label>
       <select data-change="theme">${[['auto', 'Как в системе'], ['light', 'Светлая'], ['dark', 'Тёмная']].map(([v, l]) => `<option value="${v}" ${state.settings.theme === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
 
@@ -1957,6 +1964,7 @@ Object.assign(actions, recActions, adjActions, vaultActions);
 const changes = {
   'base-cur': v => { state.settings.baseCurrency = v; save(); render(); },
   'cat-sort': v => { state.settings.sortCatsByUse = v === '1'; save(); render(); },
+  accent: v => { state.settings.accent = v; save(); render(); },
   theme: v => { state.settings.theme = v; save(); render(); },
   'tx-acc': v => { ui.sheet.accountId = v; ui.sheet.toExpr = ''; render(); },
   'tx-to': v => { ui.sheet.toAccountId = v; ui.sheet.toExpr = ''; render(); },

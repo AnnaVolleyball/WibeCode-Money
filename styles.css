@@ -1,31 +1,48 @@
+/* Тема: голубая по умолчанию, оранжевая — в настройках (data-accent="orange") */
 :root {
-  --bg: #fff7f2;
+  --bg: #f1f6fc;
   --card: #ffffff;
-  --card-2: #fff0e8;
-  --text: #2d2a32;
-  --muted: #8e8794;
-  --line: #f1e6df;
-  --accent: #ff8a65;
-  --accent-soft: #ffe1d6;
+  --card-2: #e7f0fa;
+  --text: #1f2a37;
+  --muted: #7d8896;
+  --line: #dfe8f2;
+  --accent: #3b8ef0;
+  --accent-2: #6cc4ff;
+  --accent-soft: #d9eaff;
+  --accent-shadow: rgba(59, 142, 240, .4);
   --expense: #ef5b6b;
   --income: #2fb37a;
-  --transfer: #6b8cff;
-  --shadow: 0 4px 18px rgba(120, 80, 60, .08);
+  --transfer: #8b6cf0;
+  --shadow: 0 4px 18px rgba(40, 80, 140, .08);
+  --overlay: rgba(10, 25, 45, .35);
   --radius: 20px;
   --tabbar-h: 64px;
   color-scheme: light;
 }
+:root[data-accent="orange"] {
+  --bg: #fff7f2; --card-2: #fff0e8; --text: #2d2a32; --muted: #8e8794; --line: #f1e6df;
+  --accent: #ff8a65; --accent-2: #ffb74d; --accent-soft: #ffe1d6; --accent-shadow: rgba(255, 120, 80, .45);
+  --transfer: #6b8cff; --shadow: 0 4px 18px rgba(120, 80, 60, .08); --overlay: rgba(20, 10, 10, .35);
+}
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #16141a; --card: #221f27; --card-2: #2b2731; --text: #f3eff6; --muted: #a39cab;
-    --line: #34303b; --accent: #ff9a7a; --accent-soft: #4a3029; --expense: #ff7a87;
-    --income: #4fd29a; --transfer: #8aa4ff; --shadow: 0 4px 18px rgba(0,0,0,.35); color-scheme: dark;
+    --bg: #0e141c; --card: #18212c; --card-2: #212c39; --text: #eef3f8; --muted: #95a3b2;
+    --line: #2b3847; --accent: #5aa7ff; --accent-2: #7fd0ff; --accent-soft: #1b3350; --accent-shadow: rgba(90, 167, 255, .35);
+    --expense: #ff7a87; --income: #4fd29a; --transfer: #a78bfa; --shadow: 0 4px 18px rgba(0,0,0,.35); --overlay: rgba(0, 0, 0, .5); color-scheme: dark;
+  }
+  :root[data-accent="orange"]:not([data-theme="light"]) {
+    --bg: #16141a; --card: #221f27; --card-2: #2b2731; --text: #f3eff6; --muted: #a39cab; --line: #34303b;
+    --accent: #ff9a7a; --accent-2: #ffb74d; --accent-soft: #4a3029; --accent-shadow: rgba(255, 120, 80, .35); --transfer: #8aa4ff;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #16141a; --card: #221f27; --card-2: #2b2731; --text: #f3eff6; --muted: #a39cab;
-  --line: #34303b; --accent: #ff9a7a; --accent-soft: #4a3029; --expense: #ff7a87;
-  --income: #4fd29a; --transfer: #8aa4ff; --shadow: 0 4px 18px rgba(0,0,0,.35); color-scheme: dark;
+  --bg: #0e141c; --card: #18212c; --card-2: #212c39; --text: #eef3f8; --muted: #95a3b2;
+  --line: #2b3847; --accent: #5aa7ff; --accent-2: #7fd0ff; --accent-soft: #1b3350; --accent-shadow: rgba(90, 167, 255, .35);
+  --expense: #ff7a87; --income: #4fd29a; --transfer: #a78bfa; --shadow: 0 4px 18px rgba(0,0,0,.35); --overlay: rgba(0, 0, 0, .5); color-scheme: dark;
+}
+:root[data-theme="dark"][data-accent="orange"] {
+  --bg: #16141a; --card: #221f27; --card-2: #2b2731; --text: #f3eff6; --muted: #a39cab; --line: #34303b;
+  --accent: #ff9a7a; --accent-2: #ffb74d; --accent-soft: #4a3029; --accent-shadow: rgba(255, 120, 80, .35); --transfer: #8aa4ff;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -93,10 +110,10 @@ input, select, textarea { font: inherit; color: inherit; }
 .tab .ti { font-size: 22px; line-height: 1; filter: grayscale(1); opacity: .7; }
 .tab.on { color: var(--accent); font-weight: 600; }
 .tab.on .ti { filter: none; opacity: 1; }
-.fab { justify-self: center; width: 56px; height: 56px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 32px; line-height: 1; box-shadow: 0 6px 18px rgba(255,120,80,.45); transform: translateY(-14px); }
+.fab { justify-self: center; width: 56px; height: 56px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 32px; line-height: 1; box-shadow: 0 6px 18px var(--accent-shadow); transform: translateY(-14px); }
 
 /* Sheet */
-.overlay { position: fixed; inset: 0; background: rgba(20, 10, 10, .35); z-index: 50; display: flex; align-items: flex-end; justify-content: center; }
+.overlay { position: fixed; inset: 0; background: var(--overlay); z-index: 50; display: flex; align-items: flex-end; justify-content: center; }
 .overlay.anim { animation: fade .15s; }
 .sheet.anim { animation: up .2s ease-out; }
 .sheet {
@@ -233,7 +250,7 @@ form .field input { text-align: left; }
 .goal-name { flex: 1; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .goal-pct { font-weight: 800; color: var(--accent); }
 .goal-bar { height: 10px; border-radius: 5px; background: var(--card-2); margin: 8px 0 6px; overflow: hidden; }
-.goal-bar div { height: 100%; border-radius: 5px; background: linear-gradient(90deg, var(--accent), #ffb74d); transition: width .4s; }
+.goal-bar div { height: 100%; border-radius: 5px; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width .4s; }
 .goal-sum { font-size: 14px; }
 .goal-hint { font-size: 13px; color: var(--muted); margin-top: 4px; line-height: 1.4; }
 
