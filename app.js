@@ -1,5 +1,7 @@
 'use strict';
 
+const APP_VERSION = 5;
+
 /* ================= Data ================= */
 
 const STORAGE_KEY = 'monetka-v1';
@@ -626,7 +628,7 @@ function renderSettings() {
     <button class="btn ghost" data-act="import">📥 Загрузить из файла</button>
     <button class="btn ghost" data-act="csv">📄 Экспорт в CSV (Excel)</button>
     <button class="btn danger" data-act="wipe">Удалить все данные</button>
-    <div class="muted small" style="text-align:center;margin-top:16px">Монетка · записей: ${state.transactions.length}</div>
+    <div class="muted small" style="text-align:center;margin-top:16px">Монетка · версия ${APP_VERSION} · записей: ${state.transactions.length}</div>
   `;
 }
 
@@ -1324,10 +1326,30 @@ document.getElementById('importFile').addEventListener('change', e => {
 
 /* ================= Start ================= */
 
+// Один раз: ставим новые иконки на подходящие счета
+if (!state.settings.iconsV1) {
+  const DEFAULT_EMOJI = ['💵', '💳', '🏦', '💰', '🪙', '👛'];
+  const byCur = { VND: 'bi:vnd', UZS: 'bi:uzs', RUB: 'bi:rub', USD: 'bi:usd', EUR: 'bi:eur' };
+  for (const a of state.accounts) {
+    const n = a.name.toLowerCase();
+    if (n.includes('momo') || n.includes('момо')) a.icon = 'bi:momo';
+    else if (n.includes('bidv')) a.icon = 'bi:bidv';
+    else if (n.includes('vcb') || n.includes('vietcom')) a.icon = 'bi:vcb';
+    else if (DEFAULT_EMOJI.includes(a.icon) && byCur[a.currency]) a.icon = byCur[a.currency];
+  }
+  state.settings.iconsV1 = true;
+  save();
+}
 processAuto();
 render();
 document.addEventListener('visibilitychange', () => { if (!document.hidden && !ui.sheet) { const n = state.transactions.length; processAuto(); if (state.transactions.length !== n) render(); } });
 if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => reg.update()).catch(() => {});
+  // новая версия приложения установилась — перезагружаемся (если не открыта форма)
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloaded || ui.sheet) return;
+    reloaded = true; location.reload();
+  });
 }
