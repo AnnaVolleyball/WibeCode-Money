@@ -209,3 +209,5 @@ svg:not(.bi) text { fill: var(--muted); font-size: 10px; }
 .bi-inline { display: inline-block; width: 18px; height: 18px; vertical-align: -4px; }
 .icon-pick.brands button { padding: 3px; background: transparent; }
 .icon-pick.brands button.on { background: var(--accent-soft); }
+
+.amount-input { flex: 1; min-width: 0; border: 0; background: transparent; outline: none; font-size: 32px; font-weight: 700; text-align: right; }

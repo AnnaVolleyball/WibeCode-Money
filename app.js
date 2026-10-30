@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 5;
+const APP_VERSION = 6;
 
 /* ================= Data ================= */
 
@@ -241,6 +241,7 @@ function balanceOf(a, upto) {
     if (upto && t.date > upto) continue;
     if (t.type === 'expense' && t.accountId === a.id) b -= t.amount;
     else if (t.type === 'income' && t.accountId === a.id) b += t.amount;
+    else if (t.type === 'adjust' && t.accountId === a.id) b += t.amount;
     else if (t.type === 'transfer') {
       if (t.accountId === a.id) b -= t.amount;
       if (t.toAccountId === a.id) b += (t.toAmount ?? t.amount);
@@ -383,6 +384,13 @@ function renderRecords() {
 function txRow(t) {
   const a = acc(t.accountId);
   const currency = a?.currency || base();
+  if (t.type === 'adjust') {
+    return `<button class="row" data-act="edit-tx" data-v="${t.id}">
+      <div class="ico" style="background:var(--card-2)">⚖️</div>
+      <div class="mid"><div class="title">Корректировка баланса</div><div class="sub">${esc(a?.name || '?')}${t.note ? ' · ' + esc(t.note) : ''}</div></div>
+      <div class="amt muted">${fmt(t.amount, currency, true)}</div>
+    </button>`;
+  }
   if (t.type === 'transfer') {
     const to = acc(t.toAccountId);
     const toCur = to?.currency || currency;
@@ -639,7 +647,7 @@ function closeSheet() { ui.sheet = null; render(); }
 
 function renderSheet() {
   const s = ui.sheet;
-  const body = { tx: sheetTx, acc: sheetAcc, cur: sheetCur, cats: sheetCats, cat: sheetCat, rec: sheetRec }[s.kind]();
+  const body = { tx: sheetTx, acc: sheetAcc, cur: sheetCur, cats: sheetCats, cat: sheetCat, rec: sheetRec, adjust: sheetAdjust }[s.kind]();
   const anim = ui.sheetAnimated ? '' : ' anim';
   return `<div class="overlay${anim}" data-act="overlay"><div class="sheet${anim}"><div class="grab"></div>${body}</div></div>`;
 }
@@ -657,6 +665,7 @@ function newTxSheet(type = 'expense') {
 function editTxSheet(id) {
   const t = state.transactions.find(x => x.id === id);
   if (!t) return;
+  if (t.type === 'adjust') return adjustSheet(t.accountId, t);
   openSheet({ kind: 'tx', id, type: t.type, expr: String(t.amount), toExpr: t.toAmount != null ? String(t.toAmount) : '', field: 'amount',
     accountId: t.accountId, toAccountId: t.toAccountId, categoryId: t.categoryId, date: t.date, note: t.note || '' });
 }
@@ -783,7 +792,9 @@ function sheetAcc() {
     <div class="field"><label>Название</label><input type="text" value="${esc(s.name)}" placeholder="Например, Карта Тинькофф" data-input="acc-name"></div>
     <div class="field"><label>Валюта</label><select data-change="acc-cur">${state.currencies.map(c => `<option value="${c.code}" ${c.code === s.currency ? 'selected' : ''}>${c.code} · ${esc(c.name)}</option>`).join('')}</select></div>
     <div class="field"><label>Начальный баланс</label><input type="text" inputmode="decimal" value="${esc(s.initial)}" data-input="acc-initial"></div>
-    ${s.id ? `<div class="muted small" style="margin:0 6px 10px">Текущий баланс: ${fmt(balanceOf({ ...acc(s.id), initial: parseFloat(String(s.initial).replace(',', '.')) || 0 }), s.currency)}</div>` : ''}
+    ${s.id ? `<div class="field"><label>Баланс сейчас</label><b style="flex:1;text-align:right">${fmt(balanceOf({ ...acc(s.id), initial: parseFloat(String(s.initial).replace(',', '.')) || 0 }), s.currency)}</b>
+      <button class="link" data-act="adjust" data-v="${s.id}">Изменить</button></div>
+      <div class="muted small" style="margin:0 6px 10px">«Изменить» — указать, сколько на счёте на самом деле. Начальный баланс меняет всю историю счёта.</div>` : ''}
     <div class="section-title">Иконка</div>
     <div class="icon-pick brands">${Object.keys(BRAND_ICONS).map(k => `<button class="${s.icon === 'bi:' + k ? 'on' : ''}" data-act="acc-icon" data-v="bi:${k}" title="${BRAND_ICONS[k].name}">${brandSVG(k)}</button>`).join('')}</div>
     <div class="icon-pick">${ICONS.map(i => `<button class="${s.icon === i ? 'on' : ''}" data-act="acc-icon" data-v="${i}">${i}</button>`).join('')}</div>
@@ -902,7 +913,7 @@ function exportJSON() {
 function exportCSV() {
   const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const rows = [['Дата', 'Тип', 'Сумма', 'Валюта', 'Счёт', 'Категория', 'Заметка', 'Счёт получатель', 'Сумма зачисления', 'Валюта зачисления']];
-  const types = { expense: 'Расход', income: 'Доход', transfer: 'Перевод' };
+  const types = { expense: 'Расход', income: 'Доход', transfer: 'Перевод', adjust: 'Корректировка' };
   for (const t of [...state.transactions].sort((a, b) => a.date.localeCompare(b.date))) {
     const a = acc(t.accountId), to = acc(t.toAccountId);
     rows.push([t.date, types[t.type], String(t.amount).replace('.', ','), a?.currency, a?.name, catById(t.categoryId)?.name || '', t.note,
@@ -1187,6 +1198,85 @@ const recInputs = {
   'rec-amount': v => { ui.sheet.amount = v; },
 };
 
+
+/* ---------- Корректировка баланса ---------- */
+
+function parseNum(v) {
+  const n = parseFloat(String(v).replace(/[\s ]/g, '').replace(/[−–]/g, '-').replace(',', '.'));
+  return isFinite(n) ? n : NaN;
+}
+
+// Открыть форму: какой баланс должен быть на конец выбранного дня
+function adjustSheet(accountId, t) {
+  const a = acc(accountId);
+  if (!a) return;
+  const date = t ? t.date : today();
+  const now = balanceOf(a, date);
+  openSheet({ kind: 'adjust', id: t?.id || null, accountId, date, oldDelta: t ? t.amount : 0,
+    target: String(round(now, cur(a.currency).decimals)), note: t?.note || '' });
+}
+
+function sheetAdjust() {
+  const s = ui.sheet;
+  const a = acc(s.accountId);
+  const c = a.currency;
+  const before = balanceOf(a, s.date) - s.oldDelta; // баланс на эту дату без этой корректировки
+  const target = parseNum(s.target);
+  const delta = isNaN(target) ? 0 : round(target - before, cur(c).decimals);
+  const later = state.transactions.some(t => t.date > s.date && (t.accountId === a.id || t.toAccountId === a.id));
+  return `
+    <div class="sheet-head"><button class="link" data-act="close">Отмена</button><h2>Баланс счёта</h2><button class="link" data-act="save-adjust">Готово</button></div>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+      <div class="ico" style="${accIcoStyle(a)}">${accIcon(a.icon)}</div><div><b>${esc(a.name)}</b><div class="muted small">${c}</div></div></div>
+    <div class="field"><label>На дату</label><input type="date" value="${s.date}" data-change="adj-date"></div>
+    <div class="field"><label>По записям</label><b style="flex:1;text-align:right">${fmt(before, c)}</b></div>
+    <div class="amount-label">Сколько на самом деле</div>
+    <div class="amount-box"><input class="amount-input" type="text" inputmode="decimal" value="${esc(s.target)}" data-input="adj-target"><div class="cur">${esc(cur(c).symbol)}</div></div>
+    <div class="btn-row" style="margin-bottom:10px"><button class="btn ghost" data-act="adj-zero">Обнулить</button><button class="btn ghost" data-act="adj-neg">± знак</button></div>
+    <div class="note-box" id="adjDelta">${delta ? `Будет добавлена корректировка <b>${fmt(delta, c, true)}</b>. Она не считается доходом или расходом.` : 'Баланс совпадает — менять нечего.'}
+      ${later ? '<br>После этой даты есть записи — баланс на сегодня будет с их учётом.' : ''}</div>
+    <div class="field"><label>Заметка</label><input type="text" value="${esc(s.note)}" placeholder="необязательно" data-input="adj-note"></div>
+    <button class="btn" data-act="save-adjust">Сохранить</button>
+    ${s.id ? `<button class="btn danger" data-act="del-tx">Удалить корректировку</button>` : ''}
+  `;
+}
+
+function saveAdjust() {
+  const s = ui.sheet;
+  const a = acc(s.accountId);
+  const target = parseNum(s.target);
+  if (isNaN(target)) return toast('Введите сумму');
+  const delta = round(target - (balanceOf(a, s.date) - s.oldDelta), cur(a.currency).decimals);
+  const i = state.transactions.findIndex(t => t.id === s.id);
+  if (!delta) {
+    if (i >= 0) state.transactions.splice(i, 1);
+  } else {
+    const t = { id: s.id || uid(), type: 'adjust', amount: delta, accountId: a.id, date: s.date || today(), note: s.note.trim(),
+      createdAt: i >= 0 ? state.transactions[i].createdAt : Date.now() };
+    if (i >= 0) state.transactions[i] = t; else state.transactions.push(t);
+  }
+  save(); closeSheet(); toast(delta ? 'Баланс исправлен' : 'Баланс уже такой');
+}
+
+const adjActions = {
+  adjust: v => adjustSheet(v),
+  'adj-zero': () => { ui.sheet.target = '0'; render(); },
+  'adj-neg': () => { const n = parseNum(ui.sheet.target); ui.sheet.target = String(isNaN(n) ? 0 : -n); render(); },
+  'save-adjust': () => saveAdjust(),
+};
+const adjChanges = { 'adj-date': v => { const s = ui.sheet; s.date = v || today(); render(); } };
+const adjInputs = {
+  'adj-target': v => {
+    ui.sheet.target = v;
+    // обновляем подсказку без перерисовки, чтобы не сбивать ввод
+    const s = ui.sheet, a = acc(s.accountId), n = parseNum(v);
+    const d = isNaN(n) ? 0 : round(n - (balanceOf(a, s.date) - s.oldDelta), cur(a.currency).decimals);
+    const el = document.getElementById('adjDelta');
+    if (el) el.innerHTML = d ? `Будет добавлена корректировка <b>${fmt(d, a.currency, true)}</b>. Она не считается доходом или расходом.` : 'Баланс совпадает — менять нечего.';
+  },
+  'adj-note': v => { ui.sheet.note = v; },
+};
+
 /* ================= Events ================= */
 
 const actions = {
@@ -1277,7 +1367,7 @@ const actions = {
   },
 };
 
-Object.assign(actions, recActions);
+Object.assign(actions, recActions, adjActions);
 
 const changes = {
   'base-cur': v => { state.settings.baseCurrency = v; save(); render(); },
@@ -1289,7 +1379,7 @@ const changes = {
   'cur-dec': v => { ui.sheet.decimals = Number(v); },
 };
 
-Object.assign(changes, recChanges);
+Object.assign(changes, recChanges, adjChanges);
 
 const inputs = {
   'tx-note': v => { ui.sheet.note = v; },
@@ -1302,7 +1392,7 @@ const inputs = {
   'cat-name': v => { ui.sheet.name = v; },
 };
 
-Object.assign(inputs, recInputs);
+Object.assign(inputs, recInputs, adjInputs);
 
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]');
