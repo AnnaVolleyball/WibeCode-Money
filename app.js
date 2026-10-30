@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 9;
+const APP_VERSION = 10;
 
 /* ================= Data ================= */
 
@@ -673,19 +673,25 @@ function rememberedDate() {
   return today();
 }
 
-// Категории для выбора: часто используемые — впереди. Недавние записи весят больше
-// (вес записи уменьшается вдвое каждые 30 дней). При равенстве — ручной порядок.
+// Категории для выбора. Правило: категория, которую выбрали 3 раза, встаёт на первое место.
+// Для каждой категории берём момент её 3-го с конца выбора — у кого он свежее, тот и впереди.
+// Категории, выбранные меньше 3 раз, остаются в ручном порядке.
+const CAT_PROMOTE_AFTER = 3;
 function categoriesByUse(type) {
   const list = state.categories.filter(c => c.type === type);
   if (!state.settings.sortCatsByUse) return list;
-  const score = {};
-  const now = Date.now();
+  const uses = {};
   for (const t of state.transactions) {
     if (t.type !== type || !t.categoryId) continue;
-    const days = Math.max(0, (now - parseD(t.date).getTime()) / 864e5);
-    score[t.categoryId] = (score[t.categoryId] || 0) + Math.pow(0.5, days / 30);
+    (uses[t.categoryId] ||= []).push(t.createdAt || parseD(t.date).getTime());
   }
-  return list.map((c, i) => ({ c, i, v: score[c.id] || 0 })).sort((a, b) => b.v - a.v || a.i - b.i).map(x => x.c);
+  const key = c => {
+    const u = uses[c.id];
+    if (!u || u.length < CAT_PROMOTE_AFTER) return -1;
+    u.sort((a, b) => b - a);
+    return u[CAT_PROMOTE_AFTER - 1];
+  };
+  return list.map((c, i) => ({ c, i, k: key(c) })).sort((a, b) => b.k - a.k || a.i - b.i).map(x => x.c);
 }
 
 function newTxSheet(type = 'expense') {
