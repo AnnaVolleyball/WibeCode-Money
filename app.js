@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 12;
+const APP_VERSION = 13;
 
 /* ================= Data ================= */
 
@@ -986,7 +986,6 @@ function importJSON(file) {
 /* ================= Регулярные платежи ================= */
 
 const FREQ = { day: 'день', week: 'неделю', month: 'месяц', year: 'год' };
-const FREQ_N = { day: ['день', 'дня', 'дней'], week: ['неделю', 'недели', 'недель'], month: ['месяц', 'месяца', 'месяцев'], year: ['год', 'года', 'лет'] };
 const WEEK_HEAD = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
 function plural(n, forms) { const a = n % 10, b = n % 100; return forms[a === 1 && b !== 11 ? 0 : a >= 2 && a <= 4 && (b < 10 || b >= 20) ? 1 : 2]; }
@@ -994,11 +993,28 @@ function dstr(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.g
 function parseD(s) { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); }
 function addDays(s, n) { const d = parseD(s); d.setDate(d.getDate() + n); return dstr(d); }
 
-function freqText(r) {
-  const n = Number(r.interval) || 1;
-  if (n === 1) return r.freq === 'week' ? 'Каждую неделю' : r.freq === 'day' ? 'Каждый день' : r.freq === 'year' ? 'Каждый год' : 'Каждый месяц';
-  return `Каждые ${n} ${plural(n, FREQ_N[r.freq])}`;
+// Варианты повтора как в Календаре Apple
+const REPEAT_PRESETS = [
+  { id: 'd1', label: 'Каждый день', freq: 'day', interval: 1 },
+  { id: 'w1', label: 'Каждую неделю', freq: 'week', interval: 1 },
+  { id: 'w2', label: 'Каждые 2 недели', freq: 'week', interval: 2 },
+  { id: 'm1', label: 'Каждый месяц', freq: 'month', interval: 1 },
+  { id: 'y1', label: 'Каждый год', freq: 'year', interval: 1 },
+];
+const FREQ_UNIT = { day: ['день', 'дня', 'дней'], week: ['неделю', 'недели', 'недель'], month: ['месяц', 'месяца', 'месяцев'], year: ['год', 'года', 'лет'] };
+function repeatPresetOf(s) {
+  if (s.custom) return 'custom';
+  const p = REPEAT_PRESETS.find(p => p.freq === s.freq && p.interval === Number(s.interval));
+  return p ? p.id : 'custom';
 }
+function repeatSummary(s) {
+  const n = Number(s.interval) || 1;
+  if (n === 1) return { day: 'каждый день', week: 'каждую неделю', month: 'каждый месяц', year: 'каждый год' }[s.freq];
+  const every = s.freq === 'week' ? (n % 10 === 1 && n % 100 !== 11 ? 'каждую' : 'каждые') : (n % 10 === 1 && n % 100 !== 11 ? 'каждый' : 'каждые');
+  return `${every} ${n} ${plural(n, FREQ_UNIT[s.freq])}`;
+}
+
+function freqText(r) { const t = repeatSummary(r); return t[0].toUpperCase() + t.slice(1); }
 
 // Все даты платежа в промежутке [from, to]
 function occurrences(r, from, to) {
@@ -1166,10 +1182,14 @@ function sheetRec() {
     <div class="cat-grid">${cats.map(c => `<button class="cat ${s.categoryId === c.id ? 'on' : ''}" data-act="rec-cat" data-v="${c.id}">
       <div class="ico" style="background:${c.color}33">${c.icon}</div><span>${esc(c.name)}</span></button>`).join('')}</div>
     <div class="section-title">Расписание</div>
-    <div class="field"><label>Повтор</label><select data-change="rec-freq">${Object.keys(FREQ).map(f => `<option value="${f}" ${s.freq === f ? 'selected' : ''}>Каждый ${f === 'week' ? 'неделю' : FREQ[f]}`.replace('Каждый неделю', 'Каждую неделю') + '</option>').join('')}</select></div>
-    <div class="field"><label>Интервал</label><select data-change="rec-interval">${[1, 2, 3, 4, 6, 12].map(n => `<option value="${n}" ${Number(s.interval) === n ? 'selected' : ''}>${n === 1 ? freqText({ freq: s.freq, interval: 1 }).toLowerCase() : `раз в ${n} ${plural(n, FREQ_N[s.freq])}`}</option>`).join('')}</select></div>
+    <div class="field"><label>Повтор</label><select data-change="rec-preset">${REPEAT_PRESETS.map(p => `<option value="${p.id}" ${repeatPresetOf(s) === p.id ? 'selected' : ''}>${p.label}</option>`).join('')}<option value="custom" ${repeatPresetOf(s) === 'custom' ? 'selected' : ''}>Настроить…</option></select></div>
+    ${repeatPresetOf(s) === 'custom' ? `
+      <div class="field"><label>Частота</label><select data-change="rec-freq">${[['day', 'День'], ['week', 'Неделя'], ['month', 'Месяц'], ['year', 'Год']].map(([f, l]) => `<option value="${f}" ${s.freq === f ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+      <div class="field"><label>Каждые</label><div class="stepper"><button data-act="rec-step" data-v="-1">−</button><b>${s.interval}</b><button data-act="rec-step" data-v="1">+</button></div><span class="muted" style="min-width:64px">${plural(Number(s.interval), FREQ_UNIT[s.freq])}</span></div>
+      <div class="muted small" style="margin:0 6px 8px">Платёж будет повторяться ${repeatSummary(s)}.</div>` : ''}
     <div class="field"><label>Первый платёж</label><input type="date" value="${s.startDate}" data-change="rec-start"></div>
-    <div class="field"><label>До (необяз.)</label><input type="date" value="${s.endDate || ''}" data-change="rec-end"></div>
+    <div class="field"><label>Окончание повтора</label><select data-change="rec-endmode"><option value="never" ${s.endMode !== 'date' ? 'selected' : ''}>Никогда</option><option value="date" ${s.endMode === 'date' ? 'selected' : ''}>В дату</option></select></div>
+    ${s.endMode === 'date' ? `<div class="field"><label>Дата окончания</label><input type="date" value="${s.endDate || ''}" data-change="rec-end"></div>` : ''}
     <label class="field toggle"><span>Добавлять записи сами</span><input type="checkbox" ${s.auto ? 'checked' : ''} data-change="rec-auto"></label>
     <div class="muted small" style="margin:0 6px 8px">${s.auto ? 'Когда наступит дата, запись добавится автоматически.' : 'Платёж будет в календаре, а запись вы создадите кнопкой ✓.'}</div>
     <button class="btn" data-act="save-rec">Сохранить</button>
@@ -1184,6 +1204,8 @@ function saveRec() {
   const amount = round(evalExpr(String(s.amount).replace(/\s/g, '')), cur(a.currency).decimals);
   if (!(amount > 0)) return toast('Введите сумму');
   if (!s.categoryId) return toast('Выберите категорию');
+  if (s.endMode === 'date' && !s.endDate) return toast('Укажите дату окончания');
+  if (s.endMode !== 'date') s.endDate = '';
   if (s.endDate && s.endDate < s.startDate) return toast('Дата окончания раньше начала');
   const old = state.recurring.find(r => r.id === s.id);
   const r = { id: s.id || uid(), type: s.type, name: s.name.trim(), amount, accountId: a.id, categoryId: s.categoryId, freq: s.freq,
@@ -1204,11 +1226,12 @@ const recActions = {
   'new-rec': () => {
     if (!state.accounts.length) return toast('Сначала добавьте счёт');
     openSheet({ kind: 'rec', id: null, type: 'expense', name: '', amount: '', accountId: ui.account || state.accounts[0].id, categoryId: null,
-      freq: 'month', interval: 1, startDate: ui.calSel && ui.calSel >= today() ? ui.calSel : today(), endDate: '', auto: false });
+      freq: 'month', interval: 1, startDate: ui.calSel && ui.calSel >= today() ? ui.calSel : today(), endDate: '', endMode: 'never', auto: false });
   },
-  'edit-rec': v => { const r = state.recurring.find(x => x.id === v); if (r) openSheet({ kind: 'rec', ...r, amount: String(r.amount), endDate: r.endDate || '' }); },
+  'edit-rec': v => { const r = state.recurring.find(x => x.id === v); if (r) openSheet({ kind: 'rec', ...r, amount: String(r.amount), endDate: r.endDate || '', endMode: r.endDate ? 'date' : 'never' }); },
   'rec-type': v => { if (ui.sheet.type !== v) { ui.sheet.type = v; ui.sheet.categoryId = null; } render(); },
   'rec-cat': v => { ui.sheet.categoryId = v; render(); },
+  'rec-step': v => { const s = ui.sheet; s.interval = Math.min(99, Math.max(1, (Number(s.interval) || 1) + Number(v))); s.custom = true; render(); },
   'save-rec': () => saveRec(),
   'del-rec': () => {
     if (!confirm('Удалить регулярный платёж? Уже созданные записи останутся.')) return;
@@ -1233,8 +1256,9 @@ const recActions = {
 
 const recChanges = {
   'rec-acc': v => { ui.sheet.accountId = v; render(); },
-  'rec-freq': v => { ui.sheet.freq = v; render(); },
-  'rec-interval': v => { ui.sheet.interval = Number(v); render(); },
+  'rec-preset': v => { const s = ui.sheet; if (v === 'custom') s.custom = true; else { const p = REPEAT_PRESETS.find(p => p.id === v); s.freq = p.freq; s.interval = p.interval; s.custom = false; } render(); },
+  'rec-freq': v => { ui.sheet.freq = v; ui.sheet.custom = true; render(); },
+  'rec-endmode': v => { ui.sheet.endMode = v; if (v === 'never') ui.sheet.endDate = ''; render(); },
   'rec-start': v => { ui.sheet.startDate = v || today(); },
   'rec-end': v => { ui.sheet.endDate = v; },
   'rec-auto': (v, el) => { ui.sheet.auto = el.checked; render(); },

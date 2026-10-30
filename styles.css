@@ -236,3 +236,7 @@ form .field input { text-align: left; }
 .goal-bar div { height: 100%; border-radius: 5px; background: linear-gradient(90deg, var(--accent), #ffb74d); transition: width .4s; }
 .goal-sum { font-size: 14px; }
 .goal-hint { font-size: 13px; color: var(--muted); margin-top: 4px; line-height: 1.4; }
+
+.stepper { flex: 1; display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+.stepper button { width: 34px; height: 34px; border-radius: 50%; background: var(--card-2); color: var(--accent); font-size: 20px; font-weight: 700; }
+.stepper b { min-width: 24px; text-align: center; font-size: 18px; }
