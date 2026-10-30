@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 13;
+const APP_VERSION = 14;
 
 /* ================= Data ================= */
 
@@ -1132,7 +1132,7 @@ function renderRecurring() {
 
   const sel = ui.calSel && ui.calSel.startsWith(`${y}-${pad(m + 1)}`) ? ui.calSel : null;
   const overdue = overdueList();
-  const upcoming = occInRange(today(), addDays(today(), 14)).filter(o => o.status === 'today' || o.status === 'upcoming');
+  const dueToday = occInRange(today(), today()).filter(o => o.status === 'today');
 
   return `
     <div class="topbar"><h1>Платежи</h1><button class="link" data-act="new-rec">＋ Новый</button></div>
@@ -1149,9 +1149,7 @@ function renderRecurring() {
     </div>
     ${sel ? `<div class="section-title">${dayLabel(sel)}</div>
       ${byDay[sel]?.length ? `<div class="list">${byDay[sel].map(o => occRow(o, false)).join('')}</div>` : `<div class="note-box">В этот день платежей нет</div>`}` : ''}
-    ${overdue.length ? `<div class="section-title" style="color:var(--expense)">Просрочено</div><div class="list">${overdue.map(o => occRow(o, true)).join('')}</div>` : ''}
-    <div class="section-title">Ближайшие 2 недели</div>
-    ${upcoming.length ? `<div class="list">${upcoming.map(o => occRow(o, true)).join('')}</div>` : `<div class="note-box">В ближайшие 2 недели платежей нет</div>`}
+    ${overdue.length || dueToday.length ? `<div class="section-title" style="color:var(--expense)">К оплате</div><div class="list">${[...overdue, ...dueToday].map(o => occRow(o, true)).join('')}</div>` : ''}
     <div class="section-title">Все регулярные платежи</div>
     <div class="list">${state.recurring.map(r => {
       const c = recCat(r); const a = acc(r.accountId);
