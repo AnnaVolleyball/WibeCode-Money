@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 7;
+const APP_VERSION = 8;
 
 /* ================= Data ================= */
 
@@ -654,8 +654,8 @@ function renderSheet() {
 
 /* ---------- Transaction ---------- */
 
-// Последняя дата записи: подставляем её в новую запись, если с прошлой записи прошло меньше 2 часов
-const DATE_MEMORY_MS = 2 * 60 * 60 * 1000;
+// Последняя дата записи: подставляем её в новую запись, если с прошлой записи прошло меньше часа
+const DATE_MEMORY_MS = 60 * 60 * 1000;
 function shortDate(ds) {
   if (ds === today()) return 'Сегодня';
   if (ds === addDays(today(), -1)) return 'Вчера';
