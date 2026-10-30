@@ -49,6 +49,7 @@ function defaultState() {
       cat('income', '💸', 'Кэшбэк', '#ffb74d'), cat('income', '📦', 'Другое', '#90a4ae'),
     ],
     transactions: [],
+    recurring: [],
   };
 }
 
@@ -64,7 +65,7 @@ function load() {
 function migrate(s) {
   const d = defaultState();
   s.settings = Object.assign({}, d.settings, s.settings || {});
-  for (const k of ['currencies', 'accounts', 'categories', 'transactions']) if (!Array.isArray(s[k])) s[k] = d[k];
+  for (const k of ['currencies', 'accounts', 'categories', 'transactions', 'recurring']) if (!Array.isArray(s[k])) s[k] = d[k];
   return s;
 }
 function save() {
@@ -150,6 +151,7 @@ const ui = {
   year: now.getFullYear(), month: now.getMonth(),
   account: null, // фильтр по счёту (null = все)
   chartType: 'expense', chartPeriod: 'month',
+  calY: now.getFullYear(), calM: now.getMonth(), calSel: null,
   sheet: null, // { kind, ...data }
 };
 
@@ -160,7 +162,7 @@ const app = document.getElementById('app');
 function render() {
   applyTheme();
   const sheetScroll = document.querySelector('.sheet')?.scrollTop || 0;
-  const screens = { records: renderRecords, charts: renderCharts, accounts: renderAccounts, settings: renderSettings };
+  const screens = { records: renderRecords, charts: renderCharts, accounts: renderAccounts, settings: renderSettings, recurring: renderRecurring };
   app.innerHTML = `<main class="screen">${screens[ui.tab]()}</main>${renderTabbar()}${ui.sheet ? renderSheet() : ''}`;
   const sh = document.querySelector('.sheet');
   if (sh && sheetScroll) sh.scrollTop = sheetScroll;
@@ -174,11 +176,12 @@ function applyTheme() {
 }
 
 function renderTabbar() {
-  const tab = (id, icon, label) => `<button class="tab ${ui.tab === id ? 'on' : ''}" data-act="tab" data-v="${id}"><span class="ti">${icon}</span>${label}</button>`;
+  const overdue = state.recurring.length ? overdueList().length + occInRange(today(), today()).filter(o => o.status === 'today').length : 0;
+  const tab = (id, icon, label, badge) => `<button class="tab ${ui.tab === id || (id === 'accounts' && ui.tab === 'settings') ? 'on' : ''}" data-act="tab" data-v="${id}"><span class="ti">${icon}${badge ? `<b class="badge">${badge}</b>` : ''}</span>${label}</button>`;
   return `<nav class="tabbar">
     ${tab('records', '📒', 'Записи')}${tab('charts', '📊', 'Графики')}
     <button class="fab" data-act="new-tx" aria-label="Добавить">+</button>
-    ${tab('accounts', '👛', 'Счета')}${tab('settings', '⚙️', 'Настройки')}
+    ${tab('recurring', '📅', 'Платежи', overdue)}${tab('accounts', '👛', 'Счета')}
   </nav>`;
 }
 
@@ -255,7 +258,7 @@ function txRow(t) {
   const c = catById(t.categoryId) || { icon: '❔', name: 'Без категории', color: '#90a4ae' };
   return `<button class="row" data-act="edit-tx" data-v="${t.id}">
     <div class="ico" style="background:${c.color}33">${c.icon}</div>
-    <div class="mid"><div class="title">${esc(t.note || c.name)}</div><div class="sub">${t.note ? esc(c.name) + ' · ' : ''}${esc(a?.name || '?')}</div></div>
+    <div class="mid"><div class="title">${esc(t.note || c.name)}</div><div class="sub">${t.recurringId ? '🔁 ' : ''}${t.note ? esc(c.name) + ' · ' : ''}${esc(a?.name || '?')}</div></div>
     <div class="amt ${t.type}">${fmt(t.type === 'expense' ? -t.amount : t.amount, currency, true)}</div>
   </button>`;
 }
@@ -442,7 +445,7 @@ function renderAccounts() {
   const byCur = {};
   for (const a of state.accounts) byCur[a.currency] = (byCur[a.currency] || 0) + balanceOf(a);
   return `
-    <div class="topbar"><h1>Счета</h1><button class="link" data-act="new-transfer">🔁 Перевод</button></div>
+    <div class="topbar"><h1>Счета</h1><div><button class="link" data-act="new-transfer">🔁 Перевод</button><button class="link gear" data-act="tab" data-v="settings" aria-label="Настройки">⚙️</button></div></div>
     <div class="card">
       <div class="stat big"><div class="label">Всего (≈ в ${base()})</div><div class="val">${fmt(total, base())}</div></div>
       <div class="chips" style="margin-top:10px;padding-bottom:2px">${Object.entries(byCur).map(([c, v]) => `<span class="chip">${fmt(v, c)}</span>`).join('')}</div>
@@ -463,7 +466,7 @@ function renderAccounts() {
 
 function renderSettings() {
   return `
-    <div class="topbar"><h1>Настройки</h1></div>
+    <div class="topbar"><button class="link" data-act="tab" data-v="accounts">‹ Счета</button><h1>Настройки</h1><span style="width:60px"></span></div>
 
     <div class="section-title">Основное</div>
     <div class="field"><label>Основная валюта</label>
@@ -498,7 +501,7 @@ function closeSheet() { ui.sheet = null; render(); }
 
 function renderSheet() {
   const s = ui.sheet;
-  const body = { tx: sheetTx, acc: sheetAcc, cur: sheetCur, cats: sheetCats, cat: sheetCat }[s.kind]();
+  const body = { tx: sheetTx, acc: sheetAcc, cur: sheetCur, cats: sheetCats, cat: sheetCat, rec: sheetRec }[s.kind]();
   const anim = ui.sheetAnimated ? '' : ' anim';
   return `<div class="overlay${anim}" data-act="overlay"><div class="sheet${anim}"><div class="grab"></div>${body}</div></div>`;
 }
@@ -784,6 +787,267 @@ function importJSON(file) {
   reader.readAsText(file);
 }
 
+/* ================= Регулярные платежи ================= */
+
+const FREQ = { day: 'день', week: 'неделю', month: 'месяц', year: 'год' };
+const FREQ_N = { day: ['день', 'дня', 'дней'], week: ['неделю', 'недели', 'недель'], month: ['месяц', 'месяца', 'месяцев'], year: ['год', 'года', 'лет'] };
+const WEEK_HEAD = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+
+function plural(n, forms) { const a = n % 10, b = n % 100; return forms[a === 1 && b !== 11 ? 0 : a >= 2 && a <= 4 && (b < 10 || b >= 20) ? 1 : 2]; }
+function dstr(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+function parseD(s) { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); }
+function addDays(s, n) { const d = parseD(s); d.setDate(d.getDate() + n); return dstr(d); }
+
+function freqText(r) {
+  const n = Number(r.interval) || 1;
+  if (n === 1) return r.freq === 'week' ? 'Каждую неделю' : r.freq === 'day' ? 'Каждый день' : r.freq === 'year' ? 'Каждый год' : 'Каждый месяц';
+  return `Каждые ${n} ${plural(n, FREQ_N[r.freq])}`;
+}
+
+// Все даты платежа в промежутке [from, to]
+function occurrences(r, from, to) {
+  const out = [];
+  const start = parseD(r.startDate);
+  const n = Math.max(1, Number(r.interval) || 1);
+  const last = r.endDate && r.endDate < to ? r.endDate : to;
+  for (let k = 0; k < 5000; k++) {
+    let d;
+    if (r.freq === 'day') { d = new Date(start); d.setDate(d.getDate() + k * n); }
+    else if (r.freq === 'week') { d = new Date(start); d.setDate(d.getDate() + k * 7 * n); }
+    else {
+      const months = (r.freq === 'year' ? 12 : 1) * n * k;
+      const y = start.getFullYear(), m = start.getMonth() + months;
+      const dim = new Date(y, m + 1, 0).getDate();
+      d = new Date(y, m, Math.min(start.getDate(), dim));
+    }
+    const s = dstr(d);
+    if (s > last) break;
+    if (s >= from) out.push(s);
+  }
+  return out;
+}
+
+function occStatus(r, date) {
+  if (state.transactions.some(t => t.recurringId === r.id && t.recurDate === date)) return 'paid';
+  if ((r.skipped || []).includes(date)) return 'skipped';
+  if (date < (r.createdDay || r.startDate)) return 'old'; // до создания платежа — не считаем долгом
+  return date < today() ? 'overdue' : date === today() ? 'today' : 'upcoming';
+}
+
+function occInRange(from, to) {
+  const list = [];
+  for (const r of state.recurring) for (const d of occurrences(r, from, to)) list.push({ r, date: d, status: occStatus(r, d) });
+  return list.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function overdueList() {
+  const from = addDays(today(), -366);
+  return occInRange(from, addDays(today(), -1)).filter(o => o.status === 'overdue');
+}
+
+function recCat(r) { return catById(r.categoryId) || { icon: '🔁', name: 'Без категории', color: '#90a4ae' }; }
+
+function payOcc(r, date, silent) {
+  const a = acc(r.accountId);
+  if (!a) { if (!silent) toast('Счёт этого платежа удалён'); return false; }
+  state.transactions.push({ id: uid(), type: r.type, amount: r.amount, accountId: a.id, categoryId: r.categoryId, date, note: r.name,
+    createdAt: Date.now(), recurringId: r.id, recurDate: date });
+  return true;
+}
+
+// Автодобавление: создаём записи для платежей с галочкой «добавлять сами», срок которых наступил
+function processAuto() {
+  let n = 0;
+  for (const r of state.recurring) {
+    if (!r.auto) continue;
+    for (const d of occurrences(r, r.createdDay || r.startDate, today())) {
+      const st = occStatus(r, d);
+      if ((st === 'overdue' || st === 'today') && payOcc(r, d, true)) n++;
+    }
+  }
+  if (n) { save(); setTimeout(() => toast(`Добавлено регулярных платежей: ${n}`), 300); }
+}
+
+function occRow(o, showDate) {
+  const { r, date, status } = o;
+  const c = recCat(r);
+  const a = acc(r.accountId);
+  const ccy = a?.currency || base();
+  const label = { paid: '✓ оплачено', skipped: 'пропущено', overdue: 'просрочено', today: 'сегодня', upcoming: '', old: '' }[status];
+  const dl = showDate ? `${parseD(date).getDate()} ${MONTHS_GEN[parseD(date).getMonth()]}, ${WEEKDAYS[parseD(date).getDay()]}` : '';
+  const actionable = status === 'overdue' || status === 'today' || status === 'upcoming';
+  return `<div class="row occ ${status}">
+    <div class="ico" style="background:${c.color}33">${c.icon}</div>
+    <button class="mid" style="text-align:left" data-act="edit-rec" data-v="${r.id}">
+      <div class="title">${esc(r.name || c.name)}</div>
+      <div class="sub">${[dl, label ? `<b class="st-${status}">${label}</b>` : '', esc(a?.name || '?')].filter(Boolean).join(' · ')}</div>
+    </button>
+    <div class="amt ${r.type}">${fmt(r.type === 'expense' ? -r.amount : r.amount, ccy, true)}
+      ${actionable ? `<div class="occ-btns"><button data-act="skip-occ" data-v="${r.id}|${date}" title="Пропустить">✕</button><button class="pay" data-act="pay-occ" data-v="${r.id}|${date}">✓</button></div>`
+        : status === 'skipped' ? `<div class="occ-btns"><button data-act="unskip-occ" data-v="${r.id}|${date}">вернуть</button></div>` : ''}
+    </div>
+  </div>`;
+}
+
+function renderRecurring() {
+  const y = ui.calY, m = ui.calM;
+  const first = `${y}-${pad(m + 1)}-01`;
+  const dim = new Date(y, m + 1, 0).getDate();
+  const lastD = `${y}-${pad(m + 1)}-${pad(dim)}`;
+  const monthOcc = occInRange(first, lastD);
+  const byDay = {};
+  for (const o of monthOcc) (byDay[o.date] ||= []).push(o);
+
+  // Сводка за месяц (в основной валюте)
+  let planExp = 0, leftExp = 0, planInc = 0;
+  for (const o of monthOcc) {
+    if (o.status === 'skipped' || o.status === 'old') continue;
+    const v = convert(o.r.amount, acc(o.r.accountId)?.currency || base(), base());
+    if (o.r.type === 'expense') { planExp += v; if (o.status !== 'paid') leftExp += v; } else planInc += v;
+  }
+
+  const offset = (new Date(y, m, 1).getDay() + 6) % 7;
+  const cells = [];
+  for (let i = 0; i < offset; i++) cells.push('<div></div>');
+  for (let d = 1; d <= dim; d++) {
+    const ds = `${y}-${pad(m + 1)}-${pad(d)}`;
+    const items = byDay[ds] || [];
+    const hasOver = items.some(o => o.status === 'overdue');
+    const dots = items.slice(0, 4).map(o => `<i style="background:${recCat(o.r).color}" class="${o.status === 'paid' || o.status === 'skipped' || o.status === 'old' ? 'done' : ''}"></i>`).join('');
+    cells.push(`<button class="cal-day ${ds === today() ? 'today' : ''} ${ui.calSel === ds ? 'sel' : ''} ${hasOver ? 'over' : ''}" data-act="cal-day" data-v="${ds}">
+      <span>${d}</span><div class="cal-dots">${dots}</div></button>`);
+  }
+
+  const sel = ui.calSel && ui.calSel.startsWith(`${y}-${pad(m + 1)}`) ? ui.calSel : null;
+  const overdue = overdueList();
+  const upcoming = occInRange(today(), addDays(today(), 14)).filter(o => o.status === 'today' || o.status === 'upcoming');
+
+  return `
+    <div class="topbar"><h1>Платежи</h1><button class="link" data-act="new-rec">＋ Новый</button></div>
+    ${state.recurring.length ? `
+    <div class="card">
+      <div class="cal-head">
+        <button data-act="cal-month" data-v="-1">‹</button><b>${monthLabel(y, m)}</b><button data-act="cal-month" data-v="1">›</button>
+      </div>
+      <div class="cal-grid">${WEEK_HEAD.map(w => `<div class="cal-wd">${w}</div>`).join('')}${cells.join('')}</div>
+      <div class="summary" style="margin-top:12px">
+        <div class="stat"><div class="label">Регулярные расходы</div><div class="val expense">${fmt(planExp, base())}</div><div class="muted small">осталось оплатить ${fmt(leftExp, base())}</div></div>
+        <div class="stat"><div class="label">Регулярные доходы</div><div class="val income">${fmt(planInc, base())}</div></div>
+      </div>
+    </div>
+    ${sel ? `<div class="section-title">${dayLabel(sel)}</div>
+      ${byDay[sel]?.length ? `<div class="list">${byDay[sel].map(o => occRow(o, false)).join('')}</div>` : `<div class="note-box">В этот день платежей нет</div>`}` : ''}
+    ${overdue.length ? `<div class="section-title" style="color:var(--expense)">Просрочено</div><div class="list">${overdue.map(o => occRow(o, true)).join('')}</div>` : ''}
+    <div class="section-title">Ближайшие 2 недели</div>
+    ${upcoming.length ? `<div class="list">${upcoming.map(o => occRow(o, true)).join('')}</div>` : `<div class="note-box">В ближайшие 2 недели платежей нет</div>`}
+    <div class="section-title">Все регулярные платежи</div>
+    <div class="list">${state.recurring.map(r => {
+      const c = recCat(r); const a = acc(r.accountId);
+      const next = occurrences(r, today(), addDays(today(), 800)).find(d => !['paid', 'skipped'].includes(occStatus(r, d)));
+      return `<button class="row" data-act="edit-rec" data-v="${r.id}">
+        <div class="ico" style="background:${c.color}33">${c.icon}</div>
+        <div class="mid"><div class="title">${esc(r.name || c.name)}${r.auto ? ' <span class="small muted">· авто</span>' : ''}</div>
+          <div class="sub">${freqText(r)} · ${next ? 'след. ' + parseD(next).getDate() + ' ' + MONTHS_GEN[parseD(next).getMonth()] : 'завершён'}</div></div>
+        <div class="amt ${r.type}">${fmt(r.type === 'expense' ? -r.amount : r.amount, a?.currency || base(), true)}</div>
+      </button>`;
+    }).join('')}</div>
+    <div class="note-box" style="margin-top:12px">✓ — отметить оплату (создаётся запись), ✕ — пропустить этот раз. Если включить «Добавлять сами», записи будут появляться автоматически, когда вы открываете приложение.</div>
+    ` : `<div class="empty"><div class="e">📅</div>Здесь будут подписки, аренда, зарплата и другие регулярные платежи.<br><br>
+      <button class="btn" data-act="new-rec">＋ Добавить первый платёж</button></div>`}
+  `;
+}
+
+function sheetRec() {
+  const s = ui.sheet;
+  const cats = state.categories.filter(c => c.type === s.type);
+  const a = acc(s.accountId);
+  return `
+    <div class="sheet-head"><button class="link" data-act="close">Отмена</button><h2>${s.id ? 'Платёж' : 'Новый платёж'}</h2><button class="link" data-act="save-rec">Готово</button></div>
+    <div class="seg">${[['expense', 'Расход'], ['income', 'Доход']].map(([v, l]) => `<button class="${s.type === v ? 'on' : ''}" data-act="rec-type" data-v="${v}">${l}</button>`).join('')}</div>
+    <div class="field"><label>Название</label><input type="text" value="${esc(s.name)}" placeholder="Например, Аренда" data-input="rec-name"></div>
+    <div class="field"><label>Сумма</label><input type="text" inputmode="decimal" value="${esc(s.amount)}" placeholder="0" data-input="rec-amount"><span class="muted">${esc(cur(a?.currency).symbol)}</span></div>
+    <div class="field"><label>Счёт</label><select data-change="rec-acc">${state.accounts.map(x => `<option value="${x.id}" ${x.id === s.accountId ? 'selected' : ''}>${x.icon} ${esc(x.name)} (${x.currency})</option>`).join('')}</select></div>
+    <div class="cat-grid">${cats.map(c => `<button class="cat ${s.categoryId === c.id ? 'on' : ''}" data-act="rec-cat" data-v="${c.id}">
+      <div class="ico" style="background:${c.color}33">${c.icon}</div><span>${esc(c.name)}</span></button>`).join('')}</div>
+    <div class="section-title">Расписание</div>
+    <div class="field"><label>Повтор</label><select data-change="rec-freq">${Object.keys(FREQ).map(f => `<option value="${f}" ${s.freq === f ? 'selected' : ''}>Каждый ${f === 'week' ? 'неделю' : FREQ[f]}`.replace('Каждый неделю', 'Каждую неделю') + '</option>').join('')}</select></div>
+    <div class="field"><label>Интервал</label><select data-change="rec-interval">${[1, 2, 3, 4, 6, 12].map(n => `<option value="${n}" ${Number(s.interval) === n ? 'selected' : ''}>${n === 1 ? freqText({ freq: s.freq, interval: 1 }).toLowerCase() : `раз в ${n} ${plural(n, FREQ_N[s.freq])}`}</option>`).join('')}</select></div>
+    <div class="field"><label>Первый платёж</label><input type="date" value="${s.startDate}" data-change="rec-start"></div>
+    <div class="field"><label>До (необяз.)</label><input type="date" value="${s.endDate || ''}" data-change="rec-end"></div>
+    <label class="field toggle"><span>Добавлять записи сами</span><input type="checkbox" ${s.auto ? 'checked' : ''} data-change="rec-auto"></label>
+    <div class="muted small" style="margin:0 6px 8px">${s.auto ? 'Когда наступит дата, запись добавится автоматически.' : 'Платёж будет в календаре, а запись вы создадите кнопкой ✓.'}</div>
+    <button class="btn" data-act="save-rec">Сохранить</button>
+    ${s.id ? `<button class="btn danger" data-act="del-rec">Удалить платёж</button>` : ''}
+  `;
+}
+
+function saveRec() {
+  const s = ui.sheet;
+  const a = acc(s.accountId);
+  if (!a) return toast('Сначала создайте счёт');
+  const amount = round(evalExpr(String(s.amount).replace(/\s/g, '')), cur(a.currency).decimals);
+  if (!(amount > 0)) return toast('Введите сумму');
+  if (!s.categoryId) return toast('Выберите категорию');
+  if (s.endDate && s.endDate < s.startDate) return toast('Дата окончания раньше начала');
+  const old = state.recurring.find(r => r.id === s.id);
+  const r = { id: s.id || uid(), type: s.type, name: s.name.trim(), amount, accountId: a.id, categoryId: s.categoryId, freq: s.freq,
+    interval: Number(s.interval) || 1, startDate: s.startDate, endDate: s.endDate || null, auto: !!s.auto,
+    createdDay: old?.createdDay || (s.startDate < today() ? today() : s.startDate), skipped: old?.skipped || [] };
+  // если первый платёж в прошлом — спросим, считать ли прошлые даты
+  if (!old && s.startDate < today()) {
+    const past = occurrences({ ...r, createdDay: r.startDate }, r.startDate, addDays(today(), -1)).length;
+    if (past && confirm(`С ${parseD(s.startDate).getDate()} ${MONTHS_GEN[parseD(s.startDate).getMonth()]} уже прошло платежей: ${past}. Показать их как неоплаченные${r.auto ? ' и добавить записи' : ''}?`)) r.createdDay = r.startDate;
+  }
+  const i = state.recurring.findIndex(x => x.id === r.id);
+  if (i >= 0) state.recurring[i] = r; else state.recurring.push(r);
+  processAuto();
+  save(); closeSheet(); toast('Сохранено');
+}
+
+const recActions = {
+  'new-rec': () => {
+    if (!state.accounts.length) return toast('Сначала добавьте счёт');
+    openSheet({ kind: 'rec', id: null, type: 'expense', name: '', amount: '', accountId: ui.account || state.accounts[0].id, categoryId: null,
+      freq: 'month', interval: 1, startDate: ui.calSel && ui.calSel >= today() ? ui.calSel : today(), endDate: '', auto: false });
+  },
+  'edit-rec': v => { const r = state.recurring.find(x => x.id === v); if (r) openSheet({ kind: 'rec', ...r, amount: String(r.amount), endDate: r.endDate || '' }); },
+  'rec-type': v => { if (ui.sheet.type !== v) { ui.sheet.type = v; ui.sheet.categoryId = null; } render(); },
+  'rec-cat': v => { ui.sheet.categoryId = v; render(); },
+  'save-rec': () => saveRec(),
+  'del-rec': () => {
+    if (!confirm('Удалить регулярный платёж? Уже созданные записи останутся.')) return;
+    state.recurring = state.recurring.filter(r => r.id !== ui.sheet.id);
+    save(); closeSheet(); toast('Удалено');
+  },
+  'pay-occ': v => {
+    const [id, date] = v.split('|'); const r = state.recurring.find(x => x.id === id);
+    if (r && payOcc(r, date)) { save(); render(); toast('Оплачено — запись добавлена'); }
+  },
+  'skip-occ': v => {
+    const [id, date] = v.split('|'); const r = state.recurring.find(x => x.id === id);
+    if (!r) return; (r.skipped ||= []).push(date); save(); render(); toast('Пропущено');
+  },
+  'unskip-occ': v => {
+    const [id, date] = v.split('|'); const r = state.recurring.find(x => x.id === id);
+    if (!r) return; r.skipped = (r.skipped || []).filter(d => d !== date); save(); render();
+  },
+  'cal-month': v => { [ui.calY, ui.calM] = shiftMonth(ui.calY, ui.calM, Number(v)); ui.calSel = null; render(); },
+  'cal-day': v => { ui.calSel = ui.calSel === v ? null : v; render(); },
+};
+
+const recChanges = {
+  'rec-acc': v => { ui.sheet.accountId = v; render(); },
+  'rec-freq': v => { ui.sheet.freq = v; render(); },
+  'rec-interval': v => { ui.sheet.interval = Number(v); render(); },
+  'rec-start': v => { ui.sheet.startDate = v || today(); },
+  'rec-end': v => { ui.sheet.endDate = v; },
+  'rec-auto': (v, el) => { ui.sheet.auto = el.checked; render(); },
+};
+const recInputs = {
+  'rec-name': v => { ui.sheet.name = v; },
+  'rec-amount': v => { ui.sheet.amount = v; },
+};
+
 /* ================= Events ================= */
 
 const actions = {
@@ -874,6 +1138,8 @@ const actions = {
   },
 };
 
+Object.assign(actions, recActions);
+
 const changes = {
   'base-cur': v => { state.settings.baseCurrency = v; save(); render(); },
   theme: v => { state.settings.theme = v; save(); render(); },
@@ -883,6 +1149,8 @@ const changes = {
   'acc-cur': v => { ui.sheet.currency = v; render(); },
   'cur-dec': v => { ui.sheet.decimals = Number(v); },
 };
+
+Object.assign(changes, recChanges);
 
 const inputs = {
   'tx-note': v => { ui.sheet.note = v; },
@@ -895,6 +1163,8 @@ const inputs = {
   'cat-name': v => { ui.sheet.name = v; },
 };
 
+Object.assign(inputs, recInputs);
+
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]');
   if (!el || el.disabled) return;
@@ -903,7 +1173,7 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('change', e => {
   const el = e.target.closest('[data-change]');
-  if (el && changes[el.dataset.change]) changes[el.dataset.change](el.value);
+  if (el && changes[el.dataset.change]) changes[el.dataset.change](el.value, el);
 });
 document.addEventListener('input', e => {
   const el = e.target.closest('[data-input]');
@@ -917,7 +1187,9 @@ document.getElementById('importFile').addEventListener('change', e => {
 
 /* ================= Start ================= */
 
+processAuto();
 render();
+document.addEventListener('visibilitychange', () => { if (!document.hidden && !ui.sheet) { const n = state.transactions.length; processAuto(); if (state.transactions.length !== n) render(); } });
 if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});

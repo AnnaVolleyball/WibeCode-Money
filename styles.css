@@ -172,3 +172,33 @@ svg text { fill: var(--muted); font-size: 10px; }
 .field.compact { padding: 10px 12px; }
 .field.compact select, .field.compact input { text-align: left; direction: ltr; font-size: 15px; }
 .btn-row .field { margin-bottom: 8px; }
+
+/* Платежи */
+.gear { font-size: 20px; margin-left: 4px; }
+.tab .ti { position: relative; }
+.badge { position: absolute; top: -4px; right: -12px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--expense); color: #fff; font-size: 11px; font-style: normal; line-height: 17px; text-align: center; filter: none; }
+.tab .ti:has(.badge) { opacity: 1; }
+.cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 17px; }
+.cal-head button { width: 34px; height: 34px; border-radius: 50%; background: var(--card-2); font-size: 18px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.cal-wd { text-align: center; font-size: 11px; color: var(--muted); padding: 4px 0; }
+.cal-day { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 3px; height: 46px; padding-top: 5px; border-radius: 12px; font-size: 15px; }
+.cal-day span { width: 26px; height: 26px; line-height: 26px; border-radius: 50%; text-align: center; }
+.cal-day.today span { background: var(--accent); color: #fff; font-weight: 700; }
+.cal-day.sel { background: var(--accent-soft); }
+.cal-day.over span { color: var(--expense); font-weight: 700; box-shadow: inset 0 0 0 1.5px var(--expense); }
+.cal-day.today.over span { color: #fff; }
+.cal-dots { display: flex; gap: 2px; height: 6px; }
+.cal-dots i { width: 6px; height: 6px; border-radius: 50%; }
+.cal-dots i.done { opacity: .3; }
+.occ.paid .title, .occ.skipped .title, .occ.old .title { opacity: .55; }
+.occ.skipped .title { text-decoration: line-through; }
+.st-overdue { color: var(--expense); font-weight: 600; }
+.st-today { color: var(--accent); font-weight: 600; }
+.st-paid { color: var(--income); font-weight: 600; }
+.st-skipped { font-weight: 400; }
+.occ-btns { display: flex; gap: 6px; justify-content: flex-end; margin-top: 6px; }
+.occ-btns button { min-width: 34px; height: 30px; padding: 0 8px; border-radius: 10px; background: var(--card-2); color: var(--muted); font-size: 14px; font-weight: 600; }
+.occ-btns button.pay { background: var(--income); color: #fff; }
+.field.toggle { justify-content: space-between; cursor: pointer; }
+.field.toggle input { flex: none; width: 22px; height: 22px; accent-color: var(--accent); }
