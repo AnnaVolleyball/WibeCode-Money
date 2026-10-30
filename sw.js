@@ -1,6 +1,6 @@
 // Офлайн-кэш приложения. При изменении файлов увеличьте версию.
-const CACHE = 'monetka-v10';
-const FILES = ['./', 'index.html', 'styles.css?v=10', 'app.js?v=10', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
+const CACHE = 'monetka-v11';
+const FILES = ['./', 'index.html', 'styles.css?v=11', 'app.js?v=11', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES.map(f => new Request(f, { cache: 'reload' })))).then(() => self.skipWaiting()));

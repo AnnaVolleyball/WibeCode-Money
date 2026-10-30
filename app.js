@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 10;
+const APP_VERSION = 11;
 
 /* ================= Data ================= */
 
@@ -92,6 +92,7 @@ function defaultState() {
     ],
     transactions: [],
     recurring: [],
+    vault: null,
   };
 }
 
@@ -138,7 +139,7 @@ function deviceId() {
 function itemHash(item) { const { updatedAt, updatedBy, ...rest } = item; return JSON.stringify(rest); }
 
 function takeSnapshot(s) {
-  const snap = { settings: itemHash(s.settings) };
+  const snap = { settings: itemHash(s.settings), vault: JSON.stringify(s.vault || null) };
   for (const [coll, key] of Object.entries(SYNC_COLLS)) {
     if (ORDERED.includes(coll)) s[coll].forEach((x, i) => { x.sort = i; });
     snap[coll] = new Map(s[coll].map(x => [x[key], itemHash(x)]));
@@ -150,6 +151,7 @@ function stampChanges(s) {
   const t = Date.now(), dev = deviceId();
   const prev = snapshot || { settings: null };
   const next = takeSnapshot(s);
+  if (prev.vault !== undefined && prev.vault !== next.vault) s.vaultUpdatedAt = t;
   if (prev.settings !== next.settings || !s.settings.updatedAt) { s.settings.updatedAt = t; next.settings = itemHash(s.settings); }
   s.deletions ||= [];
   for (const [coll, key] of Object.entries(SYNC_COLLS)) {
@@ -181,6 +183,7 @@ function changesSince(since = 0) {
   const out = { since, at: Date.now(), device: deviceId(), collections: {}, deletions: state.deletions.filter(d => d.deletedAt > since) };
   for (const coll of Object.keys(SYNC_COLLS)) out.collections[coll] = state[coll].filter(x => (x.updatedAt || 0) > since);
   if ((state.settings.updatedAt || 0) > since) out.settings = state.settings;
+  if ((state.vaultUpdatedAt || 0) > since) { out.vault = state.vault || null; out.vaultUpdatedAt = state.vaultUpdatedAt; }
   return out;
 }
 
@@ -204,6 +207,7 @@ function applyRemote(ch) {
     if (i >= 0 && (state[d.coll][i].updatedAt || 0) <= d.deletedAt) { state[d.coll].splice(i, 1); changed++; }
     if (!state.deletions.some(x => x.coll === d.coll && x.id === d.id)) state.deletions.push(d);
   }
+  if (ch.vaultUpdatedAt && ch.vaultUpdatedAt > (state.vaultUpdatedAt || 0)) { state.vault = ch.vault; state.vaultUpdatedAt = ch.vaultUpdatedAt; changed++; }
   if (ch.settings && (ch.settings.updatedAt || 0) > (state.settings.updatedAt || 0)) { state.settings = ch.settings; changed++; }
   // сохраняем без новых меток: у пришедших объектов свои
   snapshot = takeSnapshot(state);
@@ -301,7 +305,7 @@ const app = document.getElementById('app');
 function render() {
   applyTheme();
   const sheetScroll = document.querySelector('.sheet')?.scrollTop || 0;
-  const screens = { records: renderRecords, charts: renderCharts, accounts: renderAccounts, settings: renderSettings, recurring: renderRecurring };
+  const screens = { records: renderRecords, charts: renderCharts, accounts: renderAccounts, settings: renderSettings, recurring: renderRecurring, vault: renderVault };
   app.innerHTML = `<main class="screen">${screens[ui.tab]()}</main>${renderTabbar()}${ui.sheet ? renderSheet() : ''}`;
   const sh = document.querySelector('.sheet');
   if (sh && sheetScroll) sh.scrollTop = sheetScroll;
@@ -316,7 +320,7 @@ function applyTheme() {
 
 function renderTabbar() {
   const overdue = state.recurring.length ? overdueList().length + occInRange(today(), today()).filter(o => o.status === 'today').length : 0;
-  const tab = (id, icon, label, badge) => `<button class="tab ${ui.tab === id || (id === 'accounts' && ui.tab === 'settings') ? 'on' : ''}" data-act="tab" data-v="${id}"><span class="ti">${icon}${badge ? `<b class="badge">${badge}</b>` : ''}</span>${label}</button>`;
+  const tab = (id, icon, label, badge) => `<button class="tab ${ui.tab === id || (id === 'accounts' && (ui.tab === 'settings' || ui.tab === 'vault')) ? 'on' : ''}" data-act="tab" data-v="${id}"><span class="ti">${icon}${badge ? `<b class="badge">${badge}</b>` : ''}</span>${label}</button>`;
   return `<nav class="tabbar">
     ${tab('records', '📒', 'Записи')}${tab('charts', '📊', 'Графики')}
     <button class="fab" data-act="new-tx" aria-label="Добавить">+</button>
@@ -566,9 +570,10 @@ function groupedBars(data, vc) {
   return `<svg viewBox="0 0 ${W} ${H}" width="100%">${grid(W, H, pl, pt, pb, 0, max)}${bars}</svg>`;
 }
 
-function lineChart(data, vc) {
+function lineChart(data, vc, opts = {}) {
   const W = 320, H = 150, pl = 34, pb = 18, pt = 10;
-  let min = Math.min(...data.map(d => d.v), 0), max = Math.max(...data.map(d => d.v), 0);
+  let min = Math.min(...data.map(d => d.v), opts.tight ? Infinity : 0), max = Math.max(...data.map(d => d.v), opts.tight ? -Infinity : 0);
+  if (opts.tight) { const pad = (max - min) * 0.15 || Math.abs(max) * 0.05 || 1; min -= pad; max += pad; }
   if (min === max) max = min + 1;
   const n = data.length, step = (W - pl - 10) / (n - 1);
   const x = i => pl + 5 + i * step;
@@ -591,7 +596,7 @@ function renderAccounts() {
   const byCur = {};
   for (const a of state.accounts) byCur[a.currency] = (byCur[a.currency] || 0) + balanceOf(a);
   return `
-    <div class="topbar"><h1>Счета</h1><div><button class="link" data-act="new-transfer">🔁 Перевод</button><button class="link gear" data-act="tab" data-v="settings" aria-label="Настройки">⚙️</button></div></div>
+    <div class="topbar"><h1>Счета</h1><div><button class="link" data-act="new-transfer">🔁 Перевод</button><button class="link gear" data-act="open-vault" aria-label="Копилка">🐷</button><button class="link gear" data-act="tab" data-v="settings" aria-label="Настройки">⚙️</button></div></div>
     <div class="card">
       <div class="stat big"><div class="label">Всего (≈ в ${base()})</div><div class="val">${fmt(total, base())}</div></div>
       <div class="chips" style="margin-top:10px;padding-bottom:2px">${Object.entries(byCur).map(([c, v]) => `<span class="chip">${fmt(v, c)}</span>`).join('')}</div>
@@ -649,7 +654,7 @@ function closeSheet() { ui.sheet = null; render(); }
 
 function renderSheet() {
   const s = ui.sheet;
-  const body = { tx: sheetTx, acc: sheetAcc, cur: sheetCur, cats: sheetCats, cat: sheetCat, rec: sheetRec, adjust: sheetAdjust }[s.kind]();
+  const body = { tx: sheetTx, acc: sheetAcc, cur: sheetCur, cats: sheetCats, cat: sheetCat, rec: sheetRec, adjust: sheetAdjust, vsnap: sheetVSnap, vacc: sheetVAcc, vset: sheetVSet }[s.kind]();
   const anim = ui.sheetAnimated ? '' : ' anim';
   return `<div class="overlay${anim}" data-act="overlay"><div class="sheet${anim}"><div class="grab"></div>${body}</div></div>`;
 }
@@ -1318,6 +1323,418 @@ const adjInputs = {
   'adj-note': v => { ui.sheet.note = v; },
 };
 
+/* ================= Копилка (зашифрованные сбережения) =================
+   В state.vault лежит только зашифрованный блок (AES-GCM, ключ из пароля через PBKDF2).
+   Расшифрованные данные живут лишь в памяти (vault.data), пока копилка открыта.
+   При сворачивании приложения копилка закрывается. Забытый пароль восстановить нельзя. */
+
+const VAULT_ITER = 310000;
+const vault = { key: null, data: null, busy: false, pw1: '', pw2: '' };
+
+function b64(buf) { const a = new Uint8Array(buf); let s = ''; for (let i = 0; i < a.length; i += 0x8000) s += String.fromCharCode.apply(null, a.subarray(i, i + 0x8000)); return btoa(s); }
+function unb64(str) { const s = atob(str); const a = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) a[i] = s.charCodeAt(i); return a; }
+
+async function vaultDeriveKey(pw, salt, iter) {
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: iter, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+
+async function vaultEncryptAndStore() {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, vault.key, new TextEncoder().encode(JSON.stringify(vault.data)));
+  state.vault = { v: 1, kdf: 'PBKDF2-SHA256', iter: state.vault.iter, salt: state.vault.salt, iv: b64(iv), data: b64(ct) };
+  vault.blob = state.vault.data;
+  save();
+}
+
+async function vaultCreate(pw) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  vault.key = await vaultDeriveKey(pw, salt, VAULT_ITER);
+  vault.data = { accounts: [], snaps: [], view: base() };
+  state.vault = { v: 1, iter: VAULT_ITER, salt: b64(salt) };
+  await vaultEncryptAndStore();
+}
+
+async function vaultUnlock(pw) {
+  const v = state.vault;
+  const key = await vaultDeriveKey(pw, unb64(v.salt), v.iter || VAULT_ITER);
+  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(v.iv) }, key, unb64(v.data)); // неверный пароль → ошибка
+  vault.key = key;
+  vault.blob = v.data;
+  vault.data = Object.assign({ accounts: [], snaps: [], view: base() }, JSON.parse(new TextDecoder().decode(plain)));
+}
+
+async function vaultChangePassword(pw) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  vault.key = await vaultDeriveKey(pw, salt, VAULT_ITER);
+  state.vault = { ...state.vault, iter: VAULT_ITER, salt: b64(salt) };
+  await vaultEncryptAndStore();
+}
+
+function vaultLock() { vault.key = null; vault.data = null; vault.pw1 = vault.pw2 = ''; if (ui.sheet && ui.sheet.kind?.startsWith('v')) ui.sheet = null; }
+async function vaultCommit(msg) { await vaultEncryptAndStore(); ui.sheet = null; render(); if (msg) toast(msg); }
+
+/* ---------- Расчёты ---------- */
+
+const vSnaps = () => [...vault.data.snaps].sort((a, b) => a.date.localeCompare(b.date));
+const vAcc = id => vault.data.accounts.find(a => a.id === id);
+const vRate = (snap, code) => (snap && snap.rates && snap.rates[code]) || cur(code).perUSD || 1;
+const vConv = (amount, from, to, snap) => amount / vRate(snap, from) * vRate(snap, to);
+function vTotal(snap, view) {
+  let s = 0;
+  for (const [id, v] of Object.entries(snap.values || {})) { const a = vAcc(id); if (a) s += vConv(v, a.currency, view, snap); }
+  return s;
+}
+function vByCurrency(snap, view) {
+  const out = {};
+  for (const [id, v] of Object.entries(snap.values || {})) { const a = vAcc(id); if (a && v) out[a.currency] = (out[a.currency] || 0) + vConv(v, a.currency, view, snap); }
+  return out;
+}
+// Разбор изменения между двумя сверками: что от изменения сумм, что от курсов
+function vExplain(prev, next, view) {
+  let amount = 0, fx = 0; const fxBy = {};
+  const ids = new Set([...Object.keys(prev.values || {}), ...Object.keys(next.values || {})]);
+  for (const id of ids) {
+    const a = vAcc(id); if (!a) continue;
+    const P = prev.values?.[id] || 0, N = next.values?.[id] || 0;
+    const r0 = vRate(prev, view) / vRate(prev, a.currency), r1 = vRate(next, view) / vRate(next, a.currency);
+    amount += (N - P) * r1;
+    const f = P * (r1 - r0); fx += f; fxBy[a.currency] = (fxBy[a.currency] || 0) + f;
+  }
+  return { amount, fx, fxBy, total: amount + fx };
+}
+const CUR_COLORS = { VND: '#f47b4f', RUB: '#5c78ec', UZS: '#2bb3a6', USD: '#34a865', EUR: '#8b6cf0' };
+const curColor = (code, i) => CUR_COLORS[code] || COLORS[i % COLORS.length];
+const pct = (a, b) => b ? (a / Math.abs(b) * 100) : 0;
+const shortDateLabel = ds => { const d = parseD(ds); return `${MONTHS_SHORT[d.getMonth()]}${String(d.getFullYear()).slice(2)}`; };
+
+/* ---------- Экран ---------- */
+
+function renderVault() {
+  // копилку заменили (загрузили копию, синхронизация) или удалили — закрываем
+  if (vault.data && state.vault?.data !== vault.blob) vaultLock();
+  if (!state.vault) return vaultSetupScreen();
+  if (!vault.data) return vaultLockScreen();
+  const vd = vault.data, view = vd.view && state.currencies.some(c => c.code === vd.view) ? vd.view : base();
+  const snaps = vSnaps();
+  const last = snaps.at(-1), prev = snaps.at(-2);
+  const thisMonth = today().slice(0, 7);
+  const needCheck = vd.accounts.length && (!last || last.date.slice(0, 7) !== thisMonth);
+
+  let body = '';
+  if (!vd.accounts.length) {
+    body = `<div class="empty"><div class="e">🐷</div>Добавьте счета, где лежат сбережения: вклады, наличные, валюта.<br>Потом раз в месяц вносите суммы — и будут графики.<br><br>
+      <button class="btn" data-act="v-new-acc">＋ Добавить счёт</button></div>`;
+  } else {
+    const total = last ? vTotal(last, view) : 0;
+    const ex = last && prev ? vExplain(prev, last, view) : null;
+    const byCur = last ? vByCurrency(last, view) : {};
+    const curList = Object.entries(byCur).sort((a, b) => b[1] - a[1]);
+    body = `
+      <div class="chips">${state.currencies.map(c => `<button class="chip ${c.code === view ? 'on' : ''}" data-act="v-view" data-v="${c.code}">в ${c.code}</button>`).join('')}</div>
+      ${needCheck ? `<div class="note-box remind">📝 Пора внести суммы за ${MONTHS[new Date().getMonth()].toLowerCase()}.<button class="btn" data-act="v-new-snap">Внести суммы</button></div>` : ''}
+      <div class="card">
+        <div class="stat big"><div class="label">Сбережения${last ? ' на ' + dayLabel(last.date).replace(/^(Сегодня|Вчера), /, '') : ''}</div><div class="val">${fmt(total, view)}</div></div>
+        ${ex ? `<div class="${ex.total >= 0 ? 'income' : 'expense'}" style="font-weight:700;margin-top:4px">${fmt(ex.total, view, true)} (${pct(ex.total, vTotal(prev, view)).toFixed(1)}%) <span class="muted small" style="font-weight:400">с ${parseD(prev.date).getDate()} ${MONTHS_GEN[parseD(prev.date).getMonth()]}</span></div>` : ''}
+        ${!last ? '<div class="muted small" style="margin-top:6px">Сумм ещё нет — нажмите «Внести суммы».</div>' : ''}
+        <button class="btn ${needCheck ? 'ghost' : ''}" data-act="v-new-snap" style="margin-top:12px">📝 Внести суммы</button>
+      </div>
+
+      ${ex ? `<div class="card"><h3>Почему изменилось</h3>
+        <div class="row" style="padding:6px 0"><div class="mid">Пополнения, проценты, снятия<div class="sub">изменение сумм на счетах</div></div><div class="amt ${ex.amount >= 0 ? 'income' : 'expense'}">${fmt(ex.amount, view, true)}</div></div>
+        <div class="row" style="padding:6px 0"><div class="mid">Курсы валют<div class="sub">как изменилась цена ваших валют в ${view}</div></div><div class="amt ${ex.fx >= 0 ? 'income' : 'expense'}">${fmt(ex.fx, view, true)}</div></div>
+        ${Object.entries(ex.fxBy).filter(([c, v]) => Math.abs(v) >= 0.005 && c !== view).map(([c, v]) => `<div class="row" style="padding:2px 0 2px 16px"><div class="mid sub" style="white-space:normal">${c}: ${fmtNum(vRate(prev, c) / vRate(prev, view), 2)} → ${fmtNum(vRate(last, c) / vRate(last, view), 2)} за 1 ${view}</div><div class="amt small ${v >= 0 ? 'income' : 'expense'}">${fmt(v, view, true)}</div></div>`).join('')}
+      </div>` : ''}
+
+      ${snaps.length >= 2 ? `<div class="card"><h3>Сбережения в ${view}</h3>${lineChart(snaps.map(s => ({ label: shortDateLabel(s.date), v: vTotal(s, view) })), view, { tight: true })}</div>` : ''}
+
+      ${curList.length ? `<div class="card"><h3>По валютам</h3>
+        <div class="donut-wrap">${donut(curList.map(([c, v], i) => ({ v, color: curColor(c, i) })))}<div class="donut-center"><div class="muted small">в ${view}</div><div class="val">${fmt(total, view)}</div></div></div>
+        <div class="legend">${curList.map(([c, v], i) => `<div class="row"><div class="ico" style="background:none">${accIcon(BRAND_ICONS[c.toLowerCase()] ? 'bi:' + c.toLowerCase() : '💱')}</div>
+          <div class="mid"><div class="title">${c} <span class="muted small">${(v / total * 100).toFixed(1)}%</span></div><div class="bar-track"><div class="bar-fill" style="width:${v / curList[0][1] * 100}%;background:${curColor(c, i)}"></div></div></div>
+          <div class="amt">${fmt(v, view)}</div></div>`).join('')}</div>
+        ${snaps.length >= 2 ? `<h3 style="margin-top:16px">Доли валют во времени</h3>${vStackChart(snaps, view)}` : ''}
+      </div>` : ''}
+
+      ${snaps.length >= 2 ? `<div class="card"><h3>Изменение между сверками</h3>${vChangeChart(snaps, view)}
+        <div class="chart-legend"><span><i class="dot" style="background:var(--accent)"></i>Суммы</span><span><i class="dot" style="background:var(--transfer)"></i>Курсы</span></div></div>` : ''}
+
+      <div class="section-title">Счета</div>
+      <div class="list">${vd.accounts.filter(a => !a.archived).map(a => vAccRow(a, last, prev, view)).join('')}</div>
+      <button class="btn ghost" data-act="v-new-acc">＋ Добавить счёт</button>
+      ${vd.accounts.some(a => a.archived) ? `<div class="section-title">В архиве</div><div class="list">${vd.accounts.filter(a => a.archived).map(a => vAccRow(a, last, prev, view)).join('')}</div>` : ''}
+
+      ${snaps.length ? `<div class="section-title">История сверок</div>
+      <div class="list">${[...snaps].reverse().map(s => `<button class="row" data-act="v-edit-snap" data-v="${s.id}"><div class="ico" style="background:var(--card-2)">📝</div>
+        <div class="mid"><div class="title">${dayLabel(s.date).replace(/^(Сегодня|Вчера), /, '')}</div><div class="sub">счетов: ${Object.values(s.values || {}).filter(v => v).length}</div></div>
+        <div class="amt">${fmt(vTotal(s, view), view)}</div></button>`).join('')}</div>` : ''}
+      <div class="note-box" style="margin-top:12px">🔐 Данные копилки зашифрованы вашим паролем и не входят в общий баланс. Копилка закрывается, когда вы сворачиваете приложение.</div>
+    `;
+  }
+  return `
+    <div class="topbar"><button class="link" data-act="tab" data-v="accounts">‹ Счета</button><h1>🐷 Копилка</h1>
+      <div><button class="link" data-act="v-settings" aria-label="Настройки копилки">⚙️</button><button class="link" data-act="v-lock" aria-label="Закрыть">🔒</button></div></div>
+    ${body}`;
+}
+
+function vAccRow(a, last, prev, view) {
+  const v = last?.values?.[a.id];
+  const p = prev?.values?.[a.id];
+  const d = v != null && p != null ? v - p : null;
+  return `<button class="row" data-act="v-edit-acc" data-v="${a.id}">
+    <div class="ico" style="${accIcoStyle(a)}">${accIcon(a.icon)}</div>
+    <div class="mid"><div class="title">${esc(a.name)}</div><div class="sub">${a.currency}${a.note ? ' · ' + esc(a.note) : ''}${d ? ` · <span class="${d > 0 ? 'income' : 'expense'}">${fmt(d, a.currency, true)}</span>` : ''}</div></div>
+    <div class="amt">${v != null ? fmt(v, a.currency) : '<span class="muted">—</span>'}${v && a.currency !== view ? `<div class="sub">≈ ${fmt(vConv(v, a.currency, view, last), view)}</div>` : ''}</div>
+  </button>`;
+}
+
+function vaultSetupScreen() {
+  return `
+    <div class="topbar"><button class="link" data-act="tab" data-v="accounts">‹ Счета</button><h1>🐷 Копилка</h1><span style="width:60px"></span></div>
+    <div class="card">
+      <h3>Придумайте пароль</h3>
+      <p class="muted small" style="margin-top:0">Копилка будет зашифрована этим паролем. <b style="color:var(--expense)">Если забыть пароль, данные копилки восстановить нельзя</b> — ни мне, ни кому-то ещё.</p>
+      <form data-submit="v-create" autocomplete="on">
+        <input type="text" name="username" value="Монетка — копилка" autocomplete="username" hidden>
+        <div class="field"><input type="password" placeholder="Пароль (минимум 4 символа)" autocomplete="new-password" data-input="v-pw1" style="text-align:left"></div>
+        <div class="field"><input type="password" placeholder="Повторите пароль" autocomplete="new-password" data-input="v-pw2" style="text-align:left"></div>
+        <button class="btn" type="submit" ${vault.busy ? 'disabled' : ''}>${vault.busy ? 'Создаю…' : 'Создать копилку'}</button>
+      </form>
+    </div>
+    <div class="note-box">Совет: iPhone предложит сохранить пароль в «Пароли» — тогда копилку можно будет открывать через Face ID.</div>`;
+}
+
+function vaultLockScreen() {
+  return `
+    <div class="topbar"><button class="link" data-act="tab" data-v="accounts">‹ Счета</button><h1>🐷 Копилка</h1><span style="width:60px"></span></div>
+    <div class="empty" style="padding-top:24px"><div class="e">🔒</div>Копилка закрыта</div>
+    <form class="card" data-submit="v-unlock" autocomplete="on">
+      <input type="text" name="username" value="Монетка — копилка" autocomplete="username" hidden>
+      <div class="field"><input type="password" placeholder="Пароль" autocomplete="current-password" data-input="v-pw1" style="text-align:left" autofocus></div>
+      <button class="btn" type="submit" ${vault.busy ? 'disabled' : ''}>${vault.busy ? 'Открываю…' : 'Открыть'}</button>
+    </form>`;
+}
+
+/* ---------- Графики копилки ---------- */
+
+function vStackChart(snaps, view) {
+  const W = 320, H = 130, pl = 30, pb = 18, pt = 6;
+  const codes = [...new Set(snaps.flatMap(s => Object.keys(vByCurrency(s, view))))];
+  const n = snaps.length, bw = (W - pl) / n;
+  let bars = '';
+  snaps.forEach((s, i) => {
+    const by = vByCurrency(s, view); const tot = Object.values(by).reduce((a, b) => a + b, 0) || 1;
+    let y = H - pb;
+    codes.forEach((c, ci) => {
+      const h = (H - pt - pb) * ((by[c] || 0) / tot);
+      if (h > 0) { y -= h; bars += `<rect x="${pl + i * bw + bw * 0.15}" y="${y}" width="${bw * 0.7}" height="${h}" fill="${curColor(c, ci)}"><title>${c}: ${(by[c] / tot * 100).toFixed(1)}%</title></rect>`; }
+    });
+    if (n <= 12 || i % Math.ceil(n / 12) === 0) bars += `<text x="${pl + i * bw + bw / 2}" y="${H - 4}" text-anchor="middle">${shortDateLabel(s.date)}</text>`;
+  });
+  const grid = [0, 50, 100].map(p => { const yy = pt + (H - pt - pb) * (1 - p / 100); return `<line x1="${pl}" x2="${W}" y1="${yy}" y2="${yy}" stroke="var(--line)"/><text x="${pl - 4}" y="${yy + 3}" text-anchor="end">${p}%</text>`; }).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%">${grid}${bars}</svg>
+    <div class="chart-legend">${codes.map((c, i) => `<span><i class="dot" style="background:${curColor(c, i)}"></i>${c}</span>`).join('')}</div>`;
+}
+
+function vChangeChart(snaps, view) {
+  const rows = [];
+  for (let i = 1; i < snaps.length; i++) { const e = vExplain(snaps[i - 1], snaps[i], view); rows.push({ label: shortDateLabel(snaps[i].date), a: e.amount, f: e.fx }); }
+  const W = 320, H = 150, pl = 34, pb = 18, pt = 8;
+  const max = Math.max(...rows.flatMap(r => [r.a, r.f, 0])), min = Math.min(...rows.flatMap(r => [r.a, r.f, 0]));
+  if (max === min) return '<div class="empty">Изменений нет</div>';
+  const y = v => pt + (H - pt - pb) * (max - v) / (max - min);
+  const gw = (W - pl) / rows.length, bw = Math.min(gw * 0.32, 18);
+  const bar = (x, v, color, t) => `<rect x="${x}" y="${Math.min(y(v), y(0))}" width="${bw}" height="${Math.max(Math.abs(y(v) - y(0)), 0.5)}" rx="2" fill="${color}"><title>${t}: ${fmt(v, view, true)}</title></rect>`;
+  const bars = rows.map((r, i) => { const x = pl + i * gw + (gw - 2 * bw - 2) / 2;
+    return bar(x, r.a, 'var(--accent)', 'Суммы') + bar(x + bw + 2, r.f, 'var(--transfer)', 'Курсы') +
+      (rows.length <= 12 || i % Math.ceil(rows.length / 12) === 0 ? `<text x="${x + bw}" y="${H - 4}" text-anchor="middle">${r.label}</text>` : ''); }).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%">${grid(W, H, pl, pt, pb, min, max)}<line x1="${pl}" x2="${W}" y1="${y(0)}" y2="${y(0)}" stroke="var(--muted)" stroke-width="1"/>${bars}</svg>`;
+}
+
+/* ---------- Формы копилки ---------- */
+
+function vRatesFor(codes, src) { const r = {}; for (const c of codes) r[c] = String(round(src ? vRate(src, c) : cur(c).perUSD, 6)); return r; }
+function vUsedCodes(view) { return [...new Set(['USD', view, ...vault.data.accounts.map(a => a.currency)])]; }
+
+function vSnapSheetOpen(id) {
+  const vd = vault.data, view = vd.view || base();
+  const s = vd.snaps.find(x => x.id === id);
+  const last = vSnaps().at(-1);
+  const values = {};
+  for (const a of vd.accounts) { const v = s ? s.values?.[a.id] : last?.values?.[a.id]; values[a.id] = v != null ? String(v) : ''; }
+  openSheet({ kind: 'vsnap', id: s?.id || null, date: s?.date || today(), values, rates: vRatesFor(vUsedCodes(view), s), ratesNote: s ? '' : 'Текущие курсы из настроек' });
+}
+
+function sheetVSnap() {
+  const s = ui.sheet, vd = vault.data;
+  const accs = vd.accounts.filter(a => !a.archived || (s.values[a.id] && s.values[a.id] !== '0'));
+  return `
+    <div class="sheet-head"><button class="link" data-act="close">Отмена</button><h2>${s.id ? 'Сверка' : 'Внести суммы'}</h2><button class="link" data-act="v-save-snap">Готово</button></div>
+    <div class="field"><label>На дату</label><input type="date" value="${s.date}" data-change="vs-date"></div>
+    <div class="section-title">Сколько на счетах</div>
+    ${accs.map(a => `<div class="field"><div class="ico" style="width:30px;height:30px;font-size:16px;${accIcoStyle(a)}">${accIcon(a.icon)}</div><label style="min-width:0;flex:1;color:var(--text)">${esc(a.name)}</label>
+      <input type="text" inputmode="decimal" value="${esc(s.values[a.id])}" placeholder="0" data-input="vs-val" data-id="${a.id}" style="max-width:45%"><span class="muted">${esc(cur(a.currency).symbol)}</span></div>`).join('')}
+    <div class="muted small" style="margin:0 6px 8px">Подставлены суммы прошлой сверки — поменяйте те, что изменились.</div>
+    <div class="section-title">Курсы на эту дату</div>
+    ${Object.keys(s.rates).filter(c => c !== 'USD').map(c => `<div class="field"><label>1 USD =</label><input type="text" inputmode="decimal" value="${esc(s.rates[c])}" data-input="vs-rate" data-id="${c}"><span class="muted">${c}</span></div>`).join('')}
+    <button class="btn ghost" data-act="v-fetch-rates">🌐 Загрузить курсы на ${s.date === today() ? 'сегодня' : 'эту дату'}</button>
+    ${s.ratesNote ? `<div class="muted small" style="margin:6px">${esc(s.ratesNote)}</div>` : ''}
+    <button class="btn" data-act="v-save-snap">Сохранить</button>
+    ${s.id ? `<button class="btn danger" data-act="v-del-snap">Удалить сверку</button>` : ''}`;
+}
+
+async function vFetchRates() {
+  const s = ui.sheet;
+  toast('Загружаю курсы…');
+  const urls = [`https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@${s.date === today() ? 'latest' : s.date}/v1/currencies/usd.min.json`,
+    `https://${s.date === today() ? 'latest' : s.date}.currency-api.pages.dev/v1/currencies/usd.min.json`];
+  for (const u of urls) {
+    try {
+      const j = await (await fetch(u)).json();
+      if (!j.usd) continue;
+      let n = 0;
+      for (const c of Object.keys(s.rates)) if (c !== 'USD' && j.usd[c.toLowerCase()]) { s.rates[c] = String(round(j.usd[c.toLowerCase()], 6)); n++; }
+      s.ratesNote = `Курсы загружены на ${j.date || s.date}`;
+      render(); toast(`Курсов обновлено: ${n}`); return;
+    } catch (e) { /* пробуем следующий адрес */ }
+  }
+  toast('Не удалось загрузить курсы. Можно ввести вручную.');
+}
+
+async function vSaveSnap() {
+  const s = ui.sheet, vd = vault.data;
+  const values = {};
+  for (const [id, v] of Object.entries(s.values)) { if (String(v).trim() === '') continue; const n = parseNum(v); if (isNaN(n)) return toast('Проверьте суммы'); values[id] = round(n, cur(vAcc(id)?.currency).decimals); }
+  if (!Object.keys(values).length) return toast('Введите хотя бы одну сумму');
+  const rates = { USD: 1 };
+  for (const [c, v] of Object.entries(s.rates)) { if (c === 'USD') continue; const n = parseNum(v); if (!(n > 0)) return toast(`Проверьте курс ${c}`); rates[c] = n; }
+  const other = vd.snaps.find(x => x.date === s.date && x.id !== s.id);
+  if (other && !confirm('На эту дату уже есть сверка. Заменить её?')) return;
+  vd.snaps = vd.snaps.filter(x => x.id !== s.id && x.date !== s.date);
+  vd.snaps.push({ id: s.id || uid(), date: s.date, values, rates });
+  await vaultCommit('Сохранено');
+}
+
+function vAccSheetOpen(id) {
+  const a = id ? vAcc(id) : null;
+  openSheet({ kind: 'vacc', id: a?.id || null, name: a?.name || '', currency: a?.currency || base(), icon: a?.icon || 'bi:' + base().toLowerCase(), color: a?.color || '#ffb74d', note: a?.note || '', archived: !!a?.archived });
+}
+
+function sheetVAcc() {
+  const s = ui.sheet;
+  const used = s.id && vault.data.snaps.some(x => x.values?.[s.id] != null);
+  const hist = s.id ? vSnaps().filter(x => x.values?.[s.id] != null) : [];
+  return `
+    <div class="sheet-head"><button class="link" data-act="close">Отмена</button><h2>${s.id ? 'Счёт копилки' : 'Новый счёт'}</h2><button class="link" data-act="v-save-acc">Готово</button></div>
+    <div style="display:flex;justify-content:center;margin-bottom:10px"><div class="ico" style="width:64px;height:64px;font-size:32px;${accIcoStyle(s)}">${accIcon(s.icon)}</div></div>
+    <div class="field"><label>Название</label><input type="text" value="${esc(s.name)}" placeholder="Например, Вклад BIDV" data-input="va-name"></div>
+    <div class="field"><label>Валюта</label><select data-change="va-cur" ${used ? 'disabled' : ''}>${state.currencies.map(c => `<option value="${c.code}" ${c.code === s.currency ? 'selected' : ''}>${c.code} · ${esc(c.name)}</option>`).join('')}</select></div>
+    ${used ? '<div class="muted small" style="margin:0 6px 8px">Валюту нельзя поменять: по счёту уже есть суммы.</div>' : ''}
+    <div class="field"><label>Заметка</label><input type="text" value="${esc(s.note)}" placeholder="например, 7% годовых до мая" data-input="va-note"></div>
+    <div class="section-title">Иконка</div>
+    <div class="icon-pick brands">${Object.keys(BRAND_ICONS).map(k => `<button class="${s.icon === 'bi:' + k ? 'on' : ''}" data-act="va-icon" data-v="bi:${k}">${brandSVG(k)}</button>`).join('')}</div>
+    <div class="icon-pick">${['🏦', '💰', '💵', '🪙', '🐷', '📈', '🏠', '🚗', '💎', '🥇', '₿', '🔒'].map(i => `<button class="${s.icon === i ? 'on' : ''}" data-act="va-icon" data-v="${i}">${i}</button>`).join('')}</div>
+    ${hist.length >= 2 ? `<div class="section-title">История</div><div class="card">${lineChart(hist.map(x => ({ label: shortDateLabel(x.date), v: x.values[s.id] })), s.currency, { tight: true })}</div>` : ''}
+    ${hist.length ? `<div class="list">${[...hist].reverse().map((x, i, arr) => { const p = arr[i + 1]?.values[s.id]; const d = p != null ? x.values[s.id] - p : null;
+      return `<div class="row"><div class="mid"><div class="title">${dayLabel(x.date).replace(/^(Сегодня|Вчера), /, '')}</div></div><div class="amt">${fmt(x.values[s.id], s.currency)}${d ? `<div class="sub ${d > 0 ? 'income' : 'expense'}">${fmt(d, s.currency, true)}</div>` : ''}</div></div>`; }).join('')}</div>` : ''}
+    <button class="btn" data-act="v-save-acc">Сохранить</button>
+    ${s.id ? `<button class="btn ghost" data-act="va-archive">${s.archived ? 'Вернуть из архива' : 'В архив (счёт закрыт)'}</button><button class="btn danger" data-act="v-del-acc">Удалить счёт и его историю</button>` : ''}`;
+}
+
+async function vSaveAcc() {
+  const s = ui.sheet, vd = vault.data;
+  if (!s.name.trim()) return toast('Введите название');
+  const a = { id: s.id || uid(), name: s.name.trim(), currency: s.currency, icon: s.icon, color: s.color, note: s.note.trim(), archived: !!s.archived };
+  const i = vd.accounts.findIndex(x => x.id === a.id);
+  if (i >= 0) vd.accounts[i] = a; else vd.accounts.push(a);
+  await vaultCommit('Сохранено');
+}
+
+function sheetVSet() {
+  return `
+    <div class="sheet-head"><span></span><h2>Копилка</h2><button class="link" data-act="close">Готово</button></div>
+    <div class="section-title">Сменить пароль</div>
+    <form data-submit="v-change-pw">
+      <input type="text" name="username" value="Монетка — копилка" autocomplete="username" hidden>
+      <div class="field"><input type="password" placeholder="Новый пароль" autocomplete="new-password" data-input="v-pw1" style="text-align:left"></div>
+      <div class="field"><input type="password" placeholder="Повторите пароль" autocomplete="new-password" data-input="v-pw2" style="text-align:left"></div>
+      <button class="btn" type="submit">Сменить пароль</button>
+    </form>
+    <div class="note-box" style="margin-top:12px">Резервная копия из настроек включает копилку в зашифрованном виде. Чтобы открыть её из копии, нужен пароль, который действовал в момент сохранения копии.</div>
+    <button class="btn danger" data-act="v-destroy">Удалить копилку целиком</button>`;
+}
+
+function pwCheck() {
+  if (vault.pw1.length < 4) { toast('Пароль — минимум 4 символа'); return false; }
+  if (vault.pw1 !== vault.pw2) { toast('Пароли не совпадают'); return false; }
+  return true;
+}
+
+const vaultSubmits = {
+  'v-create': async () => {
+    if (!pwCheck()) return;
+    if (!confirm('Запомните пароль! Если его забыть, копилку открыть будет невозможно.')) return;
+    vault.busy = true; render();
+    try { await vaultCreate(vault.pw1); vault.pw1 = vault.pw2 = ''; toast('Копилка создана'); }
+    catch (e) { toast('Ошибка: ' + e.message); state.vault = null; vault.key = vault.data = null; save(); }
+    vault.busy = false; render();
+  },
+  'v-unlock': async () => {
+    if (!vault.pw1) return toast('Введите пароль');
+    vault.busy = true; render();
+    try { await vaultUnlock(vault.pw1); vault.pw1 = ''; }
+    catch (e) { toast('Неверный пароль'); }
+    vault.busy = false; render();
+  },
+  'v-change-pw': async () => {
+    if (!pwCheck()) return;
+    if (!confirm('Сменить пароль копилки? Старый пароль перестанет работать.')) return;
+    await vaultChangePassword(vault.pw1); vault.pw1 = vault.pw2 = ''; ui.sheet = null; render(); toast('Пароль изменён');
+  },
+};
+
+const vaultActions = {
+  'open-vault': () => { ui.tab = 'vault'; ui.sheet = null; render(); window.scrollTo(0, 0); },
+  'v-lock': () => { vaultLock(); render(); },
+  'v-view': async v => { vault.data.view = v; render(); await vaultEncryptAndStore(); },
+  'v-new-acc': () => vAccSheetOpen(null),
+  'v-edit-acc': v => vAccSheetOpen(v),
+  'va-icon': v => { ui.sheet.icon = v; render(); },
+  'va-archive': () => { ui.sheet.archived = !ui.sheet.archived; vSaveAcc(); },
+  'v-save-acc': () => vSaveAcc(),
+  'v-del-acc': async () => {
+    if (!confirm('Удалить счёт и все его суммы из истории?')) return;
+    const id = ui.sheet.id, vd = vault.data;
+    vd.accounts = vd.accounts.filter(a => a.id !== id);
+    for (const s of vd.snaps) delete s.values?.[id];
+    vd.snaps = vd.snaps.filter(s => Object.keys(s.values || {}).length);
+    await vaultCommit('Удалено');
+  },
+  'v-new-snap': () => { if (!vault.data.accounts.length) return toast('Сначала добавьте счёт'); vSnapSheetOpen(null); },
+  'v-edit-snap': v => vSnapSheetOpen(v),
+  'v-fetch-rates': () => vFetchRates(),
+  'v-save-snap': () => vSaveSnap(),
+  'v-del-snap': async () => { if (!confirm('Удалить эту сверку?')) return; vault.data.snaps = vault.data.snaps.filter(s => s.id !== ui.sheet.id); await vaultCommit('Удалено'); },
+  'v-settings': () => openSheet({ kind: 'vset' }),
+  'v-destroy': () => {
+    if (!confirm('Удалить копилку со всеми счетами и историей? Это нельзя отменить.')) return;
+    if (!confirm('Точно удалить копилку?')) return;
+    state.vault = null; vaultLock(); save(); render(); toast('Копилка удалена');
+  },
+};
+const vaultChanges = {
+  'vs-date': v => { ui.sheet.date = v || today(); render(); },
+  'va-cur': v => { const s = ui.sheet; if (s.icon.startsWith('bi:') && BRAND_ICONS[s.currency.toLowerCase()] && s.icon === 'bi:' + s.currency.toLowerCase() && BRAND_ICONS[v.toLowerCase()]) s.icon = 'bi:' + v.toLowerCase(); s.currency = v; render(); },
+};
+const vaultInputs = {
+  'v-pw1': v => { vault.pw1 = v; },
+  'v-pw2': v => { vault.pw2 = v; },
+  'vs-val': (v, el) => { ui.sheet.values[el.dataset.id] = v; },
+  'vs-rate': (v, el) => { ui.sheet.rates[el.dataset.id] = v; ui.sheet.ratesNote = 'Курсы введены вручную'; },
+  'va-name': v => { ui.sheet.name = v; },
+  'va-note': v => { ui.sheet.note = v; },
+};
+
 /* ================= Events ================= */
 
 const actions = {
@@ -1409,7 +1826,7 @@ const actions = {
   },
 };
 
-Object.assign(actions, recActions, adjActions);
+Object.assign(actions, recActions, adjActions, vaultActions);
 
 const changes = {
   'base-cur': v => { state.settings.baseCurrency = v; save(); render(); },
@@ -1422,7 +1839,7 @@ const changes = {
   'cur-dec': v => { ui.sheet.decimals = Number(v); },
 };
 
-Object.assign(changes, recChanges, adjChanges);
+Object.assign(changes, recChanges, adjChanges, vaultChanges);
 
 const inputs = {
   'tx-note': v => { ui.sheet.note = v; },
@@ -1435,7 +1852,7 @@ const inputs = {
   'cat-name': v => { ui.sheet.name = v; },
 };
 
-Object.assign(inputs, recInputs, adjInputs);
+Object.assign(inputs, recInputs, adjInputs, vaultInputs);
 
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]');
@@ -1449,7 +1866,7 @@ document.addEventListener('change', e => {
 });
 document.addEventListener('input', e => {
   const el = e.target.closest('[data-input]');
-  if (el && inputs[el.dataset.input]) inputs[el.dataset.input](el.value);
+  if (el && inputs[el.dataset.input]) inputs[el.dataset.input](el.value, el);
 });
 document.getElementById('importFile').addEventListener('change', e => {
   const f = e.target.files[0];
@@ -1475,6 +1892,14 @@ if (!state.settings.iconsV1) {
 }
 processAuto();
 render();
+document.addEventListener('submit', e => {
+  const f = e.target.closest('[data-submit]');
+  if (!f) return;
+  e.preventDefault();
+  vaultSubmits[f.dataset.submit]?.();
+});
+// свернули приложение — закрываем копилку
+document.addEventListener('visibilitychange', () => { if (document.hidden && vault.data) { vaultLock(); if (ui.tab === 'vault') render(); } });
 document.addEventListener('visibilitychange', () => { if (!document.hidden && !ui.sheet) { const n = state.transactions.length; processAuto(); if (state.transactions.length !== n) render(); } });
 if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
