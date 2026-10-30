@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 8;
+const APP_VERSION = 9;
 
 /* ================= Data ================= */
 
@@ -63,7 +63,7 @@ function defaultState() {
   const cat = (type, icon, name, color) => ({ id: uid(), type, icon, name, color });
   return {
     version: 1,
-    settings: { baseCurrency: 'USD', theme: 'auto' },
+    settings: { baseCurrency: 'USD', theme: 'auto', sortCatsByUse: true },
     // perUSD: сколько единиц валюты стоит 1 доллар (примерно, можно поменять в настройках)
     currencies: [
       { code: 'VND', name: 'Вьетнамский донг', symbol: '₫', decimals: 0, perUSD: 26300 },
@@ -617,6 +617,8 @@ function renderSettings() {
     <div class="section-title">Основное</div>
     <div class="field"><label>Основная валюта</label>
       <select data-change="base-cur">${state.currencies.map(c => `<option value="${c.code}" ${c.code === base() ? 'selected' : ''}>${c.code} · ${esc(c.name)}</option>`).join('')}</select></div>
+    <div class="field"><label>Порядок категорий</label>
+      <select data-change="cat-sort"><option value="1" ${state.settings.sortCatsByUse ? 'selected' : ''}>Частые — впереди</option><option value="0" ${state.settings.sortCatsByUse ? '' : 'selected'}>Как в списке</option></select></div>
     <div class="field"><label>Тема</label>
       <select data-change="theme">${[['auto', 'Как в системе'], ['light', 'Светлая'], ['dark', 'Тёмная']].map(([v, l]) => `<option value="${v}" ${state.settings.theme === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
 
@@ -671,6 +673,21 @@ function rememberedDate() {
   return today();
 }
 
+// Категории для выбора: часто используемые — впереди. Недавние записи весят больше
+// (вес записи уменьшается вдвое каждые 30 дней). При равенстве — ручной порядок.
+function categoriesByUse(type) {
+  const list = state.categories.filter(c => c.type === type);
+  if (!state.settings.sortCatsByUse) return list;
+  const score = {};
+  const now = Date.now();
+  for (const t of state.transactions) {
+    if (t.type !== type || !t.categoryId) continue;
+    const days = Math.max(0, (now - parseD(t.date).getTime()) / 864e5);
+    score[t.categoryId] = (score[t.categoryId] || 0) + Math.pow(0.5, days / 30);
+  }
+  return list.map((c, i) => ({ c, i, v: score[c.id] || 0 })).sort((a, b) => b.v - a.v || a.i - b.i).map(x => x.c);
+}
+
 function newTxSheet(type = 'expense') {
   const lastAcc = state.transactions.length ? state.transactions.reduce((a, b) => ((a.createdAt || 0) > (b.createdAt || 0) ? a : b)).accountId : null;
   const accountId = ui.account || (acc(lastAcc) ? lastAcc : state.accounts[0]?.id);
@@ -715,7 +732,7 @@ function sheetTx() {
   const ccy = a?.currency || base();
   const isTransfer = s.type === 'transfer';
   const crossCur = isTransfer && to && a && to.currency !== a.currency;
-  const cats = state.categories.filter(c => c.type === s.type);
+  const cats = categoriesByUse(s.type);
   const accOptions = sel => state.accounts.map(x => `<option value="${x.id}" ${x.id === sel ? 'selected' : ''}>${accIconText(x.icon)}${esc(x.name)} (${x.currency})</option>`).join('');
   const autoTo = crossCur && !s.toExpr ? fmtNum(round(convert(evalExpr(s.expr), a.currency, to.currency), cur(to.currency).decimals), cur(to.currency).decimals) : null;
 
@@ -1127,7 +1144,7 @@ function renderRecurring() {
 
 function sheetRec() {
   const s = ui.sheet;
-  const cats = state.categories.filter(c => c.type === s.type);
+  const cats = categoriesByUse(s.type);
   const a = acc(s.accountId);
   return `
     <div class="sheet-head"><button class="link" data-act="close">Отмена</button><h2>${s.id ? 'Платёж' : 'Новый платёж'}</h2><button class="link" data-act="save-rec">Готово</button></div>
@@ -1390,6 +1407,7 @@ Object.assign(actions, recActions, adjActions);
 
 const changes = {
   'base-cur': v => { state.settings.baseCurrency = v; save(); render(); },
+  'cat-sort': v => { state.settings.sortCatsByUse = v === '1'; save(); render(); },
   theme: v => { state.settings.theme = v; save(); render(); },
   'tx-acc': v => { ui.sheet.accountId = v; ui.sheet.toExpr = ''; render(); },
   'tx-to': v => { ui.sheet.toAccountId = v; ui.sheet.toExpr = ''; render(); },
