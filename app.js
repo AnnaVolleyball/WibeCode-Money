@@ -11,6 +11,46 @@ const COLORS = ['#ff8a65', '#ffb74d', '#ffd54f', '#aed581', '#4db6ac', '#4fc3f7'
 const ICONS = ['🍔', '🛒', '☕', '🚕', '🚌', '⛽', '🏠', '💡', '📱', '🌐', '👕', '👟', '💊', '🏥', '🎮', '🎬', '✈️', '🏖️', '🎁', '📚', '💅', '💇', '🐾', '👶', '🏋️', '🍷', '🚬', '🧾', '🔧', '🚗', '💻', '🎵',
   '💼', '💰', '💸', '📈', '🏦', '💳', '💵', '🪙', '🐷', '👛', '📦', '⭐', '❤️', '🎉', '🧸', '🌿'];
 
+
+/* ---------- Иконки банков и валют (в одном стиле: круг с градиентом и белой надписью) ---------- */
+const BRAND_ICONS = {
+  momo: { name: 'MoMo', c: ['#e2389a', '#a50064'], lines: ['mo', 'mo'] },
+  bidv: { name: 'BIDV', c: ['#1fb5a8', '#00675f'], text: 'BIDV', accent: '#ffc928' },
+  vcb:  { name: 'Vietcombank', c: ['#8cc63f', '#00813d'], text: 'VCB' },
+  vnd:  { name: 'Донг', c: ['#ffa36b', '#e8553d'], text: '₫' },
+  rub:  { name: 'Рубль', c: ['#7d9bff', '#3c55d6'], text: '₽' },
+  uzs:  { name: 'Сум', c: ['#4dd0c4', '#14867b'], text: 'сўм' },
+  usd:  { name: 'Доллар', c: ['#4cc77a', '#1b7f45'], text: '$' },
+  eur:  { name: 'Евро', c: ['#a78bfa', '#6d48d8'], text: '€' },
+};
+
+function brandSVG(key) {
+  const b = BRAND_ICONS[key];
+  const g = `bg-${key}`;
+  let inner;
+  if (b.lines) {
+    inner = `<text x="24" y="22" text-anchor="middle" font-size="15" font-weight="800" fill="#fff" letter-spacing="-.5">${b.lines[0]}</text>
+      <text x="24" y="36" text-anchor="middle" font-size="15" font-weight="800" fill="#fff" letter-spacing="-.5">${b.lines[1]}</text>`;
+  } else {
+    const t = b.text, len = [...t].length;
+    const fs = len === 1 ? 26 : len === 3 ? 15 : 13;
+    const fit = len >= 3 ? ` textLength="${len === 3 ? 30 : 34}" lengthAdjust="spacingAndGlyphs"` : '';
+    inner = `<text x="24" y="${len === 1 ? 33 : 29}" text-anchor="middle" font-size="${fs}" font-weight="800" fill="#fff"${fit}>${t}</text>`;
+  }
+  const accent = b.accent ? `<path d="M13 35 Q24 41 35 35" stroke="${b.accent}" stroke-width="2.4" fill="none" stroke-linecap="round"/>` : '';
+  return `<svg class="bi" viewBox="0 0 48 48" aria-label="${b.name}"><defs><linearGradient id="${g}" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="${b.c[0]}"/><stop offset="1" stop-color="${b.c[1]}"/></linearGradient></defs>
+    <circle cx="24" cy="24" r="24" fill="url(#${g})"/><circle cx="24" cy="24" r="23" fill="none" stroke="#fff" stroke-opacity=".18" stroke-width="1.5"/>${accent}${inner}</svg>`;
+}
+const isBrand = icon => typeof icon === 'string' && icon.startsWith('bi:') && BRAND_ICONS[icon.slice(3)];
+// Иконка счёта: эмодзи или картинка. inline — маленькая, рядом с текстом
+function accIcon(icon, inline) {
+  if (isBrand(icon)) return inline ? `<span class="bi-inline">${brandSVG(icon.slice(3))}</span>` : brandSVG(icon.slice(3));
+  return esc(icon);
+}
+const accIconText = icon => isBrand(icon) ? '' : icon + ' ';
+const accIcoStyle = a => isBrand(a.icon) ? 'background:none' : `background:${a.color}33`;
+
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 function pad(n) { return String(n).padStart(2, '0'); }
 function today() { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
@@ -30,10 +70,10 @@ function defaultState() {
       { code: 'USD', name: 'Доллар США', symbol: '$', decimals: 2, perUSD: 1 },
     ],
     accounts: [
-      { id: uid(), name: 'Наличные донги', currency: 'VND', initial: 0, icon: '💵', color: '#ffb74d' },
-      { id: uid(), name: 'Карта сумы', currency: 'UZS', initial: 0, icon: '💳', color: '#4db6ac' },
-      { id: uid(), name: 'Карта рубли', currency: 'RUB', initial: 0, icon: '🏦', color: '#7986cb' },
-      { id: uid(), name: 'Доллары', currency: 'USD', initial: 0, icon: '💰', color: '#aed581' },
+      { id: uid(), name: 'Наличные донги', currency: 'VND', initial: 0, icon: 'bi:vnd', color: '#ffb74d' },
+      { id: uid(), name: 'Карта сумы', currency: 'UZS', initial: 0, icon: 'bi:uzs', color: '#4db6ac' },
+      { id: uid(), name: 'Карта рубли', currency: 'RUB', initial: 0, icon: 'bi:rub', color: '#7986cb' },
+      { id: uid(), name: 'Доллары', currency: 'USD', initial: 0, icon: 'bi:usd', color: '#aed581' },
     ],
     categories: [
       cat('expense', '🍔', 'Еда', '#ff8a65'), cat('expense', '🛒', 'Продукты', '#aed581'),
@@ -290,7 +330,7 @@ function monthSwitch() {
 function accountChips() {
   return `<div class="chips">
     <button class="chip ${!ui.account ? 'on' : ''}" data-act="filter-acc" data-v="">Все счета</button>
-    ${state.accounts.map(a => `<button class="chip ${ui.account === a.id ? 'on' : ''}" data-act="filter-acc" data-v="${a.id}">${a.icon} ${esc(a.name)}</button>`).join('')}
+    ${state.accounts.map(a => `<button class="chip ${ui.account === a.id ? 'on' : ''}" data-act="filter-acc" data-v="${a.id}">${accIcon(a.icon, true)} ${esc(a.name)}</button>`).join('')}
   </div>`;
 }
 
@@ -549,7 +589,7 @@ function renderAccounts() {
     ${state.accounts.map(a => {
       const b = balanceOf(a);
       return `<button class="acc-card" data-act="edit-acc" data-v="${a.id}">
-        <div class="ico" style="background:${a.color}33">${a.icon}</div>
+        <div class="ico" style="${accIcoStyle(a)}">${accIcon(a.icon)}</div>
         <div class="mid" style="flex:1;min-width:0"><div class="title" style="font-weight:600">${esc(a.name)}</div><div class="muted small">${a.currency}</div></div>
         <div class="bal"><div class="${b < 0 ? 'expense' : ''}">${fmt(b, a.currency)}</div>${a.currency !== base() ? `<div class="muted small">≈ ${fmt(convert(b, a.currency, base()), base())}</div>` : ''}</div>
       </button>`;
@@ -648,7 +688,7 @@ function sheetTx() {
   const isTransfer = s.type === 'transfer';
   const crossCur = isTransfer && to && a && to.currency !== a.currency;
   const cats = state.categories.filter(c => c.type === s.type);
-  const accOptions = sel => state.accounts.map(x => `<option value="${x.id}" ${x.id === sel ? 'selected' : ''}>${x.icon} ${esc(x.name)} (${x.currency})</option>`).join('');
+  const accOptions = sel => state.accounts.map(x => `<option value="${x.id}" ${x.id === sel ? 'selected' : ''}>${accIconText(x.icon)}${esc(x.name)} (${x.currency})</option>`).join('');
   const autoTo = crossCur && !s.toExpr ? fmtNum(round(convert(evalExpr(s.expr), a.currency, to.currency), cur(to.currency).decimals), cur(to.currency).decimals) : null;
 
   return `
@@ -737,12 +777,13 @@ function sheetAcc() {
   const s = ui.sheet;
   return `
     <div class="sheet-head"><button class="link" data-act="close">Отмена</button><h2>${s.id ? 'Счёт' : 'Новый счёт'}</h2><button class="link" data-act="save-acc">Готово</button></div>
-    <div style="display:flex;justify-content:center;margin-bottom:10px"><div class="ico" style="width:64px;height:64px;font-size:32px;background:${s.color}33">${s.icon}</div></div>
+    <div style="display:flex;justify-content:center;margin-bottom:10px"><div class="ico" style="width:64px;height:64px;font-size:32px;${accIcoStyle(s)}">${accIcon(s.icon)}</div></div>
     <div class="field"><label>Название</label><input type="text" value="${esc(s.name)}" placeholder="Например, Карта Тинькофф" data-input="acc-name"></div>
     <div class="field"><label>Валюта</label><select data-change="acc-cur">${state.currencies.map(c => `<option value="${c.code}" ${c.code === s.currency ? 'selected' : ''}>${c.code} · ${esc(c.name)}</option>`).join('')}</select></div>
     <div class="field"><label>Начальный баланс</label><input type="text" inputmode="decimal" value="${esc(s.initial)}" data-input="acc-initial"></div>
     ${s.id ? `<div class="muted small" style="margin:0 6px 10px">Текущий баланс: ${fmt(balanceOf({ ...acc(s.id), initial: parseFloat(String(s.initial).replace(',', '.')) || 0 }), s.currency)}</div>` : ''}
     <div class="section-title">Иконка</div>
+    <div class="icon-pick brands">${Object.keys(BRAND_ICONS).map(k => `<button class="${s.icon === 'bi:' + k ? 'on' : ''}" data-act="acc-icon" data-v="bi:${k}" title="${BRAND_ICONS[k].name}">${brandSVG(k)}</button>`).join('')}</div>
     <div class="icon-pick">${ICONS.map(i => `<button class="${s.icon === i ? 'on' : ''}" data-act="acc-icon" data-v="${i}">${i}</button>`).join('')}</div>
     <div class="section-title">Цвет</div>
     <div class="color-pick">${COLORS.map(c => `<button class="${s.color === c ? 'on' : ''}" style="background:${c}" data-act="acc-color" data-v="${c}"></button>`).join('')}</div>
@@ -1062,7 +1103,7 @@ function sheetRec() {
     <div class="seg">${[['expense', 'Расход'], ['income', 'Доход']].map(([v, l]) => `<button class="${s.type === v ? 'on' : ''}" data-act="rec-type" data-v="${v}">${l}</button>`).join('')}</div>
     <div class="field"><label>Название</label><input type="text" value="${esc(s.name)}" placeholder="Например, Аренда" data-input="rec-name"></div>
     <div class="field"><label>Сумма</label><input type="text" inputmode="decimal" value="${esc(s.amount)}" placeholder="0" data-input="rec-amount"><span class="muted">${esc(cur(a?.currency).symbol)}</span></div>
-    <div class="field"><label>Счёт</label><select data-change="rec-acc">${state.accounts.map(x => `<option value="${x.id}" ${x.id === s.accountId ? 'selected' : ''}>${x.icon} ${esc(x.name)} (${x.currency})</option>`).join('')}</select></div>
+    <div class="field"><label>Счёт</label><select data-change="rec-acc">${state.accounts.map(x => `<option value="${x.id}" ${x.id === s.accountId ? 'selected' : ''}>${accIconText(x.icon)}${esc(x.name)} (${x.currency})</option>`).join('')}</select></div>
     <div class="cat-grid">${cats.map(c => `<button class="cat ${s.categoryId === c.id ? 'on' : ''}" data-act="rec-cat" data-v="${c.id}">
       <div class="ico" style="background:${c.color}33">${c.icon}</div><span>${esc(c.name)}</span></button>`).join('')}</div>
     <div class="section-title">Расписание</div>

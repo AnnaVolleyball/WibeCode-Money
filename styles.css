@@ -161,7 +161,7 @@ input, select, textarea { font: inherit; color: inherit; }
 .legend .row { padding: 9px 2px; }
 .bar-track { height: 6px; background: var(--card-2); border-radius: 3px; margin-top: 4px; overflow: hidden; }
 .bar-fill { height: 100%; border-radius: 3px; }
-svg text { fill: var(--muted); font-size: 10px; }
+svg:not(.bi) text { fill: var(--muted); font-size: 10px; }
 .chart-legend { display: flex; gap: 14px; justify-content: center; font-size: 12px; color: var(--muted); margin-top: 6px; }
 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: -1px; }
 
@@ -202,3 +202,10 @@ svg text { fill: var(--muted); font-size: 10px; }
 .occ-btns button.pay { background: var(--income); color: #fff; }
 .field.toggle { justify-content: space-between; cursor: pointer; }
 .field.toggle input { flex: none; width: 22px; height: 22px; accent-color: var(--accent); }
+
+/* Иконки банков и валют */
+.bi { width: 100%; height: 100%; display: block; border-radius: 50%; }
+.bi text { fill: #fff; font-family: -apple-system, "SF Pro Rounded", "Segoe UI", Roboto, sans-serif; }
+.bi-inline { display: inline-block; width: 18px; height: 18px; vertical-align: -4px; }
+.icon-pick.brands button { padding: 3px; background: transparent; }
+.icon-pick.brands button.on { background: var(--accent-soft); }
