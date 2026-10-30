@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 11;
+const APP_VERSION = 12;
 
 /* ================= Data ================= */
 
@@ -654,7 +654,7 @@ function closeSheet() { ui.sheet = null; render(); }
 
 function renderSheet() {
   const s = ui.sheet;
-  const body = { tx: sheetTx, acc: sheetAcc, cur: sheetCur, cats: sheetCats, cat: sheetCat, rec: sheetRec, adjust: sheetAdjust, vsnap: sheetVSnap, vacc: sheetVAcc, vset: sheetVSet }[s.kind]();
+  const body = { tx: sheetTx, acc: sheetAcc, cur: sheetCur, cats: sheetCats, cat: sheetCat, rec: sheetRec, adjust: sheetAdjust, vsnap: sheetVSnap, vacc: sheetVAcc, vset: sheetVSet, vgoal: sheetVGoal }[s.kind]();
   const anim = ui.sheetAnimated ? '' : ' anim';
   return `<div class="overlay${anim}" data-act="overlay"><div class="sheet${anim}"><div class="grab"></div>${body}</div></div>`;
 }
@@ -1361,7 +1361,7 @@ async function vaultUnlock(pw) {
   const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(v.iv) }, key, unb64(v.data)); // неверный пароль → ошибка
   vault.key = key;
   vault.blob = v.data;
-  vault.data = Object.assign({ accounts: [], snaps: [], view: base() }, JSON.parse(new TextDecoder().decode(plain)));
+  vault.data = Object.assign({ accounts: [], snaps: [], goals: [], view: base() }, JSON.parse(new TextDecoder().decode(plain)));
 }
 
 async function vaultChangePassword(pw) {
@@ -1440,6 +1440,7 @@ function renderVault() {
         <button class="btn ${needCheck ? 'ghost' : ''}" data-act="v-new-snap" style="margin-top:12px">📝 Внести суммы</button>
       </div>
 
+      ${goalsCard()}
       ${ex ? `<div class="card"><h3>Почему изменилось</h3>
         <div class="row" style="padding:6px 0"><div class="mid">Пополнения, проценты, снятия<div class="sub">изменение сумм на счетах</div></div><div class="amt ${ex.amount >= 0 ? 'income' : 'expense'}">${fmt(ex.amount, view, true)}</div></div>
         <div class="row" style="padding:6px 0"><div class="mid">Курсы валют<div class="sub">как изменилась цена ваших валют в ${view}</div></div><div class="amt ${ex.fx >= 0 ? 'income' : 'expense'}">${fmt(ex.fx, view, true)}</div></div>
@@ -1734,6 +1735,109 @@ const vaultInputs = {
   'va-name': v => { ui.sheet.name = v; },
   'va-note': v => { ui.sheet.note = v; },
 };
+
+/* ---------- Цели копилки ---------- */
+
+const GOAL_ICONS = ['🎯', '🏠', '🚗', '✈️', '🏖️', '💍', '🎓', '💻', '📱', '👶', '🛡️', '🏝️', '🎸', '🐶', '🏋️', '💰'];
+function monthsBetween(a, b) { const d1 = parseD(a), d2 = parseD(b); return (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth()) + (d2.getDate() - d1.getDate()) / 30.44; }
+function addMonthsStr(ds, m) { const d = parseD(ds); d.setDate(d.getDate() + Math.round(m * 30.44)); return dstr(d); }
+const MONTHS_DAT = ['январю', 'февралю', 'марту', 'апрелю', 'маю', 'июню', 'июлю', 'августу', 'сентябрю', 'октябрю', 'ноябрю', 'декабрю'];
+function monthYear(ds) { const d = parseD(ds); return `${MONTHS_DAT[d.getMonth()]} ${d.getFullYear()}`; }
+function goalScope(g) { return g.accountIds?.length ? g.accountIds : vault.data.accounts.map(a => a.id); }
+function goalValue(g, snap) {
+  if (!snap) return 0;
+  let s = 0;
+  for (const id of goalScope(g)) { const a = vAcc(id), v = snap.values?.[id]; if (a && v) s += vConv(v, a.currency, g.currency, snap); }
+  return s;
+}
+function goalInfo(g) {
+  const snaps = vSnaps(), last = snaps.at(-1);
+  const value = goalValue(g, last), left = Math.max(0, g.target - value), progress = g.target ? Math.min(1, value / g.target) : 0;
+  // темп: средний прирост в месяц за последние полгода сверок
+  let pace = null;
+  const recent = snaps.filter(s => last && monthsBetween(s.date, last.date) <= 6.5);
+  if (recent.length >= 2) { const m = monthsBetween(recent[0].date, last.date); if (m > 0.5) pace = (value - goalValue(g, recent[0])) / m; }
+  const monthsLeft = g.deadline ? monthsBetween(today(), g.deadline) : null;
+  const perMonth = g.deadline && left > 0 && monthsLeft > 0 ? left / Math.max(monthsLeft, 1) : null;
+  const eta = left > 0 && pace > 0 ? addMonthsStr(last.date, left / pace) : null;
+  return { value, left, progress, pace, monthsLeft, perMonth, eta, done: left <= 0 && g.target > 0 };
+}
+
+function goalsCard() {
+  const goals = vault.data.goals || [];
+  if (!goals.length) return `<button class="btn ghost" data-act="v-new-goal" style="margin-bottom:14px">🎯 Поставить цель</button>`;
+  return `<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><h3 style="margin:0">Цели</h3><button class="link" data-act="v-new-goal">＋ Цель</button></div>
+    ${goals.map(g => {
+      const i = goalInfo(g);
+      const late = i.eta && g.deadline && i.eta > g.deadline;
+      let hint;
+      if (i.done) hint = '<span class="income">🎉 Цель достигнута!</span>';
+      else {
+        const parts = [];
+        if (g.deadline) parts.push(i.monthsLeft > 0 ? `до ${parseD(g.deadline).getDate()} ${MONTHS_GEN[parseD(g.deadline).getMonth()]} ${parseD(g.deadline).getFullYear()} — откладывать ~${fmt(Math.ceil(i.perMonth), g.currency)}/мес` : '<span class="expense">срок прошёл</span>');
+        if (i.eta) parts.push(`<span class="${late ? 'expense' : ''}">при нынешнем темпе — к ${monthYear(i.eta)}${late ? ' (позже срока)' : ''}</span>`);
+        else if (i.pace !== null && i.pace <= 0) parts.push('<span class="expense">сейчас сумма не растёт</span>');
+        hint = parts.join('<br>');
+      }
+      return `<button class="goal" data-act="v-edit-goal" data-v="${g.id}">
+        <div class="goal-top"><span class="goal-ico">${g.icon || '🎯'}</span><span class="goal-name">${esc(g.name)}</span><span class="goal-pct">${Math.floor(i.progress * 100)}%</span></div>
+        <div class="goal-bar"><div style="width:${i.progress * 100}%;${i.done ? 'background:var(--income)' : ''}"></div></div>
+        <div class="goal-sum"><b>${fmt(i.value, g.currency)}</b> из ${fmt(g.target, g.currency)}${i.left > 0 ? ` · осталось ${fmt(i.left, g.currency)}` : ''}</div>
+        ${hint ? `<div class="goal-hint">${hint}</div>` : ''}
+      </button>`;
+    }).join('')}</div>`;
+}
+
+function vGoalSheetOpen(id) {
+  const g = (vault.data.goals || []).find(x => x.id === id);
+  openSheet({ kind: 'vgoal', id: g?.id || null, name: g?.name || '', target: g ? String(g.target) : '', currency: g?.currency || vault.data.view || base(),
+    deadline: g?.deadline || '', icon: g?.icon || '🎯', accountIds: [...(g?.accountIds || [])] });
+}
+
+function sheetVGoal() {
+  const s = ui.sheet;
+  const all = !s.accountIds.length;
+  return `
+    <div class="sheet-head"><button class="link" data-act="close">Отмена</button><h2>${s.id ? 'Цель' : 'Новая цель'}</h2><button class="link" data-act="v-save-goal">Готово</button></div>
+    <div style="display:flex;justify-content:center;margin-bottom:10px"><div class="ico" style="width:64px;height:64px;font-size:32px;background:var(--accent-soft)">${s.icon}</div></div>
+    <div class="field"><label>Название</label><input type="text" value="${esc(s.name)}" placeholder="Например, Подушка безопасности" data-input="vg-name"></div>
+    <div class="field"><label>Сумма</label><input type="text" inputmode="decimal" value="${esc(s.target)}" placeholder="10000" data-input="vg-target"></div>
+    <div class="field"><label>Валюта</label><select data-change="vg-cur">${state.currencies.map(c => `<option value="${c.code}" ${c.code === s.currency ? 'selected' : ''}>${c.code} · ${esc(c.name)}</option>`).join('')}</select></div>
+    <div class="field"><label>Срок (необяз.)</label><input type="date" value="${s.deadline}" data-change="vg-deadline"></div>
+    <div class="section-title">Какие счета считаются</div>
+    <div class="chips" style="flex-wrap:wrap;margin:0;padding:0 0 10px">
+      <button class="chip ${all ? 'on' : ''}" data-act="vg-acc" data-v="">Все счета копилки</button>
+      ${vault.data.accounts.filter(a => !a.archived).map(a => `<button class="chip ${s.accountIds.includes(a.id) ? 'on' : ''}" data-act="vg-acc" data-v="${a.id}">${accIcon(a.icon, true)} ${esc(a.name)}</button>`).join('')}
+    </div>
+    <div class="section-title">Иконка</div>
+    <div class="icon-pick">${GOAL_ICONS.map(i => `<button class="${s.icon === i ? 'on' : ''}" data-act="vg-icon" data-v="${i}">${i}</button>`).join('')}</div>
+    <div class="muted small" style="margin:0 6px 8px">Прогресс считается по последней сверке: суммы выбранных счетов в валюте цели.</div>
+    <button class="btn" data-act="v-save-goal">Сохранить</button>
+    ${s.id ? `<button class="btn danger" data-act="v-del-goal">Удалить цель</button>` : ''}`;
+}
+
+async function vSaveGoal() {
+  const s = ui.sheet, vd = vault.data;
+  if (!s.name.trim()) return toast('Введите название');
+  const target = parseNum(s.target);
+  if (!(target > 0)) return toast('Введите сумму цели');
+  const g = { id: s.id || uid(), name: s.name.trim(), target, currency: s.currency, deadline: s.deadline || null, icon: s.icon, accountIds: s.accountIds };
+  vd.goals ||= [];
+  const i = vd.goals.findIndex(x => x.id === g.id);
+  if (i >= 0) vd.goals[i] = g; else vd.goals.push(g);
+  await vaultCommit('Сохранено');
+}
+
+Object.assign(vaultActions, {
+  'v-new-goal': () => vGoalSheetOpen(null),
+  'v-edit-goal': v => vGoalSheetOpen(v),
+  'vg-icon': v => { ui.sheet.icon = v; render(); },
+  'vg-acc': v => { const s = ui.sheet; if (!v) s.accountIds = []; else s.accountIds = s.accountIds.includes(v) ? s.accountIds.filter(x => x !== v) : [...s.accountIds, v]; render(); },
+  'v-save-goal': () => vSaveGoal(),
+  'v-del-goal': async () => { if (!confirm('Удалить цель?')) return; vault.data.goals = vault.data.goals.filter(g => g.id !== ui.sheet.id); await vaultCommit('Удалено'); },
+});
+Object.assign(vaultChanges, { 'vg-cur': v => { ui.sheet.currency = v; }, 'vg-deadline': v => { ui.sheet.deadline = v; } });
+Object.assign(vaultInputs, { 'vg-name': v => { ui.sheet.name = v; }, 'vg-target': v => { ui.sheet.target = v; } });
 
 /* ================= Events ================= */
 

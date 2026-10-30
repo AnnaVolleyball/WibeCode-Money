@@ -224,3 +224,15 @@ svg:not(.bi) text { fill: var(--muted); font-size: 10px; }
 .note-box.remind .btn { margin-top: 10px; }
 form.card .field, form .field { box-shadow: none; background: var(--card-2); }
 form .field input { text-align: left; }
+
+/* Цели */
+.goal { display: block; width: 100%; text-align: left; padding: 10px 0; }
+.goal + .goal { border-top: 1px solid var(--line); }
+.goal-top { display: flex; align-items: center; gap: 8px; }
+.goal-ico { font-size: 22px; }
+.goal-name { flex: 1; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.goal-pct { font-weight: 800; color: var(--accent); }
+.goal-bar { height: 10px; border-radius: 5px; background: var(--card-2); margin: 8px 0 6px; overflow: hidden; }
+.goal-bar div { height: 100%; border-radius: 5px; background: linear-gradient(90deg, var(--accent), #ffb74d); transition: width .4s; }
+.goal-sum { font-size: 14px; }
+.goal-hint { font-size: 13px; color: var(--muted); margin-top: 4px; line-height: 1.4; }
