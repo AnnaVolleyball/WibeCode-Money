@@ -211,3 +211,10 @@ svg:not(.bi) text { fill: var(--muted); font-size: 10px; }
 .icon-pick.brands button.on { background: var(--accent-soft); }
 
 .amount-input { flex: 1; min-width: 0; border: 0; background: transparent; outline: none; font-size: 32px; font-weight: 700; text-align: right; }
+
+.today-btn { flex: none; font-size: 13px; padding: 2px 0 2px 6px; }
+.date-field { position: relative; }
+.date-label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 15px; }
+.date-label.past { color: var(--accent); font-weight: 600; }
+.date-overlay { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; z-index: 1; }
+.today-btn { position: relative; z-index: 2; }

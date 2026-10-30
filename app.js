@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 6;
+const APP_VERSION = 7;
 
 /* ================= Data ================= */
 
@@ -654,12 +654,29 @@ function renderSheet() {
 
 /* ---------- Transaction ---------- */
 
+// Последняя дата записи: подставляем её в новую запись, если с прошлой записи прошло меньше 2 часов
+const DATE_MEMORY_MS = 2 * 60 * 60 * 1000;
+function shortDate(ds) {
+  if (ds === today()) return 'Сегодня';
+  if (ds === addDays(today(), -1)) return 'Вчера';
+  const d = parseD(ds);
+  return `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}${d.getFullYear() !== new Date().getFullYear() ? ' ' + d.getFullYear() : ''}, ${WEEKDAYS[d.getDay()]}`;
+}
+function rememberDate(date) { try { localStorage.setItem('monetka-lastdate', JSON.stringify({ date, at: Date.now() })); } catch (e) {} }
+function rememberedDate() {
+  try {
+    const m = JSON.parse(localStorage.getItem('monetka-lastdate') || 'null');
+    if (m && m.date && Date.now() - m.at < DATE_MEMORY_MS) return m.date;
+  } catch (e) {}
+  return today();
+}
+
 function newTxSheet(type = 'expense') {
   const lastAcc = state.transactions.length ? state.transactions.reduce((a, b) => ((a.createdAt || 0) > (b.createdAt || 0) ? a : b)).accountId : null;
   const accountId = ui.account || (acc(lastAcc) ? lastAcc : state.accounts[0]?.id);
   const other = state.accounts.find(a => a.id !== accountId);
   openSheet({ kind: 'tx', id: null, type, expr: '', toExpr: '', field: 'amount', accountId, toAccountId: other?.id || accountId,
-    categoryId: null, date: today(), note: '' });
+    categoryId: null, date: rememberedDate(), note: '' });
 }
 
 function editTxSheet(id) {
@@ -723,7 +740,7 @@ function sheetTx() {
     `}
     <div class="btn-row">
       ${isTransfer ? '' : `<div class="field compact"><select data-change="tx-acc">${accOptions(s.accountId)}</select></div>`}
-      <div class="field compact" ${isTransfer ? 'style="grid-column:1/-1"' : ''}><input type="date" value="${s.date}" data-change="tx-date"></div>
+      <div class="field compact date-field" ${isTransfer ? 'style="grid-column:1/-1"' : ''}><span class="date-label ${s.date !== today() ? 'past' : ''}">📅 ${shortDate(s.date)}</span><input class="date-overlay" type="date" value="${s.date}" data-change="tx-date" aria-label="Дата">${s.date !== today() ? '<button class="link today-btn" data-act="tx-today">Сегодня</button>' : ''}</div>
     </div>
     <div class="field"><label>Заметка</label><input type="text" value="${esc(s.note)}" placeholder="необязательно" data-input="tx-note"></div>
 
@@ -774,6 +791,7 @@ function saveTx() {
   const i = state.transactions.findIndex(x => x.id === t.id);
   if (i >= 0) state.transactions[i] = t; else state.transactions.push(t);
   save();
+  if (!s.id) rememberDate(t.date);
   ui.sheet = null;
   // показываем месяц, в который добавили запись
   const [y, m] = t.date.split('-').map(Number);
@@ -1294,6 +1312,7 @@ const actions = {
   'tx-type': v => { const s = ui.sheet; if (s.type !== v) { s.type = v; s.categoryId = null; s.field = 'amount';
     if (v === 'transfer' && s.toAccountId === s.accountId) s.toAccountId = state.accounts.find(a => a.id !== s.accountId)?.id || s.accountId; } render(); },
   'tx-field': v => { ui.sheet.field = v; render(); },
+  'tx-today': () => { ui.sheet.date = today(); render(); },
   'tx-cat': v => { ui.sheet.categoryId = v; render(); },
   key: v => pressKey(v),
   'save-tx': () => saveTx(),
@@ -1374,7 +1393,7 @@ const changes = {
   theme: v => { state.settings.theme = v; save(); render(); },
   'tx-acc': v => { ui.sheet.accountId = v; ui.sheet.toExpr = ''; render(); },
   'tx-to': v => { ui.sheet.toAccountId = v; ui.sheet.toExpr = ''; render(); },
-  'tx-date': v => { ui.sheet.date = v; },
+  'tx-date': v => { ui.sheet.date = v || today(); render(); },
   'acc-cur': v => { ui.sheet.currency = v; render(); },
   'cur-dec': v => { ui.sheet.decimals = Number(v); },
 };
