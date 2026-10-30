@@ -53,24 +53,120 @@ function defaultState() {
   };
 }
 
+/* ---------- Подготовка к синхронизации ----------
+   У каждого объекта есть updatedAt (когда изменён), удалённые попадают в state.deletions.
+   Метки ставятся автоматически в save(): сравниваем с прошлым снимком. Так любой код,
+   который меняет state и вызывает save(), сразу «готов к синхронизации». */
+
+const SYNC_COLLS = { currencies: 'code', accounts: 'id', categories: 'id', transactions: 'id', recurring: 'id' };
+const ORDERED = ['accounts', 'categories', 'currencies']; // порядок важен — храним его в поле sort
+let snapshot = null;
+
 let state = load();
 
 function load() {
+  let s = null;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return migrate(JSON.parse(raw));
+    if (raw) s = migrate(JSON.parse(raw));
   } catch (e) { console.error(e); }
-  return defaultState();
+  s ||= migrate(defaultState());
+  // первый запуск новой версии: проставляем метки всем старым данным
+  snapshot = takeSnapshot(s);
+  stampChanges(s);
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch (e) {}
+  return s;
 }
 function migrate(s) {
   const d = defaultState();
   s.settings = Object.assign({}, d.settings, s.settings || {});
-  for (const k of ['currencies', 'accounts', 'categories', 'transactions', 'recurring']) if (!Array.isArray(s[k])) s[k] = d[k];
+  for (const k of ['currencies', 'accounts', 'categories', 'transactions', 'recurring', 'deletions']) if (!Array.isArray(s[k])) s[k] = d[k] || [];
+  s.version = 2;
   return s;
 }
+
+function deviceId() {
+  try {
+    let id = localStorage.getItem('monetka-device');
+    if (!id) { id = 'dev-' + uid(); localStorage.setItem('monetka-device', id); }
+    return id;
+  } catch (e) { return 'dev-unknown'; }
+}
+
+function itemHash(item) { const { updatedAt, updatedBy, ...rest } = item; return JSON.stringify(rest); }
+
+function takeSnapshot(s) {
+  const snap = { settings: itemHash(s.settings) };
+  for (const [coll, key] of Object.entries(SYNC_COLLS)) {
+    if (ORDERED.includes(coll)) s[coll].forEach((x, i) => { x.sort = i; });
+    snap[coll] = new Map(s[coll].map(x => [x[key], itemHash(x)]));
+  }
+  return snap;
+}
+
+function stampChanges(s) {
+  const t = Date.now(), dev = deviceId();
+  const prev = snapshot || { settings: null };
+  const next = takeSnapshot(s);
+  if (prev.settings !== next.settings || !s.settings.updatedAt) { s.settings.updatedAt = t; next.settings = itemHash(s.settings); }
+  s.deletions ||= [];
+  for (const [coll, key] of Object.entries(SYNC_COLLS)) {
+    const before = prev[coll] || new Map();
+    for (const x of s[coll]) {
+      if (before.get(x[key]) !== next[coll].get(x[key]) || !x.updatedAt) { x.updatedAt = t; x.updatedBy = dev; }
+    }
+    // исчезнувшие объекты → «надгробия», чтобы удаление дошло до других устройств
+    for (const id of before.keys()) {
+      if (!next[coll].has(id)) {
+        s.deletions = s.deletions.filter(d => !(d.coll === coll && d.id === id));
+        s.deletions.push({ coll, id, deletedAt: t, deletedBy: dev });
+      }
+    }
+    // объект вернулся (например, загрузили копию) — убираем надгробие
+    s.deletions = s.deletions.filter(d => d.coll !== coll || !next[coll].has(d.id));
+  }
+  snapshot = next;
+}
+
 function save() {
+  stampChanges(state);
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
   catch (e) { toast('Не удалось сохранить: ' + e.message); }
+}
+
+// Что изменилось после момента since (для отправки на сервер)
+function changesSince(since = 0) {
+  const out = { since, at: Date.now(), device: deviceId(), collections: {}, deletions: state.deletions.filter(d => d.deletedAt > since) };
+  for (const coll of Object.keys(SYNC_COLLS)) out.collections[coll] = state[coll].filter(x => (x.updatedAt || 0) > since);
+  if ((state.settings.updatedAt || 0) > since) out.settings = state.settings;
+  return out;
+}
+
+// Принять изменения с сервера: побеждает более позднее изменение
+function applyRemote(ch) {
+  let changed = 0;
+  for (const [coll, key] of Object.entries(SYNC_COLLS)) {
+    for (const r of ch.collections?.[coll] || []) {
+      const i = state[coll].findIndex(x => x[key] === r[key]);
+      const tomb = state.deletions.find(d => d.coll === coll && d.id === r[key]);
+      if (tomb && tomb.deletedAt >= r.updatedAt) continue;
+      if (i < 0) { state[coll].push(r); changed++; }
+      else if ((r.updatedAt || 0) > (state[coll][i].updatedAt || 0)) { state[coll][i] = r; changed++; }
+    }
+    if (ORDERED.includes(coll)) state[coll].sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0));
+  }
+  for (const d of ch.deletions || []) {
+    const key = SYNC_COLLS[d.coll];
+    if (!key) continue;
+    const i = state[d.coll].findIndex(x => x[key] === d.id);
+    if (i >= 0 && (state[d.coll][i].updatedAt || 0) <= d.deletedAt) { state[d.coll].splice(i, 1); changed++; }
+    if (!state.deletions.some(x => x.coll === d.coll && x.id === d.id)) state.deletions.push(d);
+  }
+  if (ch.settings && (ch.settings.updatedAt || 0) > (state.settings.updatedAt || 0)) { state.settings = ch.settings; changed++; }
+  // сохраняем без новых меток: у пришедших объектов свои
+  snapshot = takeSnapshot(state);
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+  return changed;
 }
 
 /* ================= Helpers ================= */
