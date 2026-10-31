@@ -1,0 +1,76 @@
+# Как устроена Монетка
+
+Статическое веб-приложение (PWA) без сборки и зависимостей. Работает офлайн, все данные хранятся на телефоне.
+Публикуется через GitHub Pages из ветки `claude/money-plus-hardcoding-miicnd`:
+https://annavolleyball.github.io/WibeCode-Money/
+
+## Файлы
+| Файл | Что внутри |
+|---|---|
+| `index.html` | каркас страницы, подключает `styles.css?v=N` и `app.js?v=N` |
+| `app.js` | вся логика и отрисовка (обычный скрипт, без модулей) |
+| `styles.css` | стили; цвета — CSS-переменные на `:root` (голубая тема; оранжевая — `data-accent="orange"`; тёмная — `prefers-color-scheme` и `data-theme`) |
+| `sw.js` | service worker: сначала сеть (`cache: 'no-store'`), без сети — кэш; при новой версии страница перезагружается сама |
+| `manifest.webmanifest`, `icons/` | установка на экран «Домой» |
+
+Версия меняется в трёх местах сразу: `APP_VERSION` (app.js), `CACHE` и `?v=` (sw.js), `?v=` (index.html).
+Номер версии виден внизу экрана настроек.
+
+## Отрисовка
+Без фреймворка: `render()` целиком пересобирает HTML из `state` и `ui`. События — делегирование по атрибутам:
+`data-act` (клик → `actions`), `data-change` (→ `changes`), `data-input` (→ `inputs`), `data-submit` (формы копилки).
+Нижние «шторки» (формы) — `ui.sheet = { kind, ... }`, отрисовщик выбирается по `kind`.
+
+## Данные (`localStorage['monetka-v1']`, `state.version = 2`)
+```
+settings      { baseCurrency, theme, accent, sortCatsByUse, ratesUpdated, iconsV1, updatedAt }
+currencies    [{ code, name, symbol, decimals, perUSD }]           // perUSD — сколько единиц за 1 USD
+accounts      [{ id, name, currency, initial, icon, color, sort }] // icon: эмодзи или 'bi:<ключ>' (картинка банка/валюты)
+categories    [{ id, type: expense|income, name, icon, color, sort }]
+transactions  [{ id, type: expense|income|transfer|adjust, amount, accountId, toAccountId?, toAmount?,
+                 categoryId?, date: 'YYYY-MM-DD', note, createdAt, recurringId?, recurDate? }]
+recurring     [{ id, type, name, amount, accountId, categoryId, freq: day|week|month|year, interval,
+                 startDate, endDate|null, auto, createdDay, skipped: [даты] }]
+deletions     [{ coll, id, deletedAt, deletedBy }]                 // журнал удалений для синхронизации
+vault         { v, kdf, iter, salt, iv, data } | null              // зашифрованная копилка
+vaultUpdatedAt
+```
+У объектов коллекций есть также `updatedAt` и `updatedBy` (см. «Синхронизация»).
+Прочие ключи: `monetka-device` — id устройства; `monetka-lastdate` — последняя дата записи (действует 1 час).
+
+Баланс счёта = `initial` + доходы − расходы ± переводы + корректировки (`adjust`, сумма со знаком).
+Корректировки и переводы не входят в доходы/расходы и графики категорий.
+Суммы в разных валютах сводятся в основную по `perUSD` (курсы — вручную или кнопкой с open.er-api.com).
+
+## Правила поведения
+- **Порядок категорий в форме записи** (`categoriesByUse`): категория, выбранная 3 раза, встаёт первой —
+  сортировка по моменту 3-го с конца выбора; выбранные меньше 3 раз остаются в ручном порядке. Отключается в настройках.
+- **Дата новой записи** — дата прошлой записи, если с неё прошло меньше часа, иначе сегодня.
+- **Регулярные платежи:** даты считает `occurrences()`; оплата создаёт обычную запись с `recurringId/recurDate`.
+  Даты до `createdDay` не считаются долгом. `auto` — записи создаются сами при открытии приложения (`processAuto`).
+  Форма повтора как в Календаре Apple: готовые варианты + «Настроить…» (частота и «каждые N»), окончание «никогда/в дату».
+
+## Синхронизация (подготовлено, сервера пока нет)
+`save()` сравнивает состояние с прошлым снимком и сам проставляет `updatedAt/updatedBy` изменённым объектам,
+а исчезнувшие заносит в `deletions`. API для будущего сервера:
+- `changesSince(ts)` — всё, что изменилось после `ts` (объекты, удаления, настройки, блок копилки);
+- `applyRemote(changes)` — принять чужие изменения; побеждает более позднее (`updatedAt`); удаление побеждает, если оно позже правки.
+План — в `docs/SYNC-PLAN.md`.
+
+## Копилка (🐷 на экране «Счета»)
+Отдельные счета сбережений и ежемесячные «сверки» сумм. Хранится в `state.vault` **в зашифрованном виде**:
+PBKDF2-SHA256 (310 000 итераций, соль 16 байт) → ключ AES-GCM-256, при каждом сохранении новый IV.
+Расшифрованные данные только в памяти (`vault.data`); копилка закрывается при сворачивании приложения.
+Пароль нигде не хранится, забытый пароль восстановить нельзя.
+```
+vault.data = { view, accounts: [{ id, name, currency, icon, color, note, archived }],
+               snaps: [{ id, date, values: { accId: сумма }, rates: { CODE: perUSD } }],
+               goals: [{ id, name, target, currency, deadline, icon, accountIds }] }
+```
+Курсы сохраняются в каждой сверке (исторические — `@fawazahmed0/currency-api` через jsDelivr).
+«Почему изменилось»: Δ = Σ (N−P)·r₁ (суммы) + Σ P·(r₁−r₀) (курсы), где r — цена валюты счёта в валюте просмотра.
+Прогноз цели — по среднему приросту за последние ~6 месяцев сверок.
+
+## Проверка
+Playwright + Chromium: локальный `python3 -m http.server`, окно 390×844, сценарии кликами по `data-act`.
+Ошибок в консоли быть не должно.
