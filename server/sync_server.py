@@ -166,9 +166,13 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header('Access-Control-Allow-Headers', 'Authorization, Content-Type')
             self.send_header('Access-Control-Max-Age', '86400')
 
-    def reply(self, code, obj):
+    def reply(self, code, obj, close=False):
         data = json.dumps(obj, separators=(',', ':')).encode()
         self.send_response(code)
+        if close:
+            # тело запроса не дочитано — соединение дальше использовать нельзя
+            self.send_header('Connection', 'close')
+            self.close_connection = True
         self.cors()
         self.send_header('Content-Type', 'application/json')
         self.send_header('Cache-Control', 'no-store')
@@ -185,11 +189,18 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == '/health':
             return self.reply(200, {'ok': True})
-        self.reply(404, {'error': 'not found'})
+        self.reply(404, {'error': 'not found'}, close=True)
 
     def do_POST(self):
         if self.path != '/sync':
-            return self.reply(404, {'error': 'not found'})
+            return self.reply(404, {'error': 'not found'}, close=True)
+        try:
+            length = int(self.headers.get('Content-Length', '0'))
+        except ValueError:
+            length = -1
+        if length <= 0 or length > MAX_BODY:
+            return self.reply(413, {'error': 'bad size'}, close=True)
+        raw = self.rfile.read(length)  # дочитываем тело всегда, до любых отказов
         if not rate_ok(self.client_ip()):
             return self.reply(429, {'error': 'too many requests'})
         auth = self.headers.get('Authorization', '')
@@ -197,13 +208,7 @@ class Handler(BaseHTTPRequestHandler):
         if not HEX64.match(token):
             return self.reply(401, {'error': 'no token'})
         try:
-            length = int(self.headers.get('Content-Length', '0'))
-        except ValueError:
-            length = -1
-        if length <= 0 or length > MAX_BODY:
-            return self.reply(413, {'error': 'bad size'})
-        try:
-            body = json.loads(self.rfile.read(length))
+            body = json.loads(raw)
             if not isinstance(body, dict):
                 raise ValueError
         except ValueError:
