@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 16;
+const APP_VERSION = 17;
 
 /* ================= Data ================= */
 
@@ -44,14 +44,58 @@ function brandSVG(key) {
     <stop offset="0" stop-color="${b.c[0]}"/><stop offset="1" stop-color="${b.c[1]}"/></linearGradient></defs>
     <circle cx="24" cy="24" r="24" fill="url(#${g})"/><circle cx="24" cy="24" r="23" fill="none" stroke="#fff" stroke-opacity=".18" stroke-width="1.5"/>${accent}${inner}</svg>`;
 }
+/* ---------- Иконки счетов «Морозный фарфор»: белый рисунок на круге цвета счёта ---------- */
+const ACC_ICONS = {
+  card:   { name: 'Карта',        d: '<rect x="3" y="6" width="18" height="12.5" rx="2.5"/><path d="M3 10.2h18M6.5 15h4"/>' },
+  cash:   { name: 'Наличные',     d: '<rect x="2.5" y="6.5" width="19" height="11" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M5.5 9.5v.01M18.5 14.5v.01"/>' },
+  bank:   { name: 'Банк',         d: '<path d="M3.5 9.5 12 4.5l8.5 5"/><path d="M5.5 10v7M9.8 10v7M14.2 10v7M18.5 10v7M3.5 19.5h17"/>' },
+  wallet: { name: 'Кошелёк',      d: '<path d="M18.5 8V6.5a2 2 0 0 0-2-2h-11a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2H5.5"/><path d="M16.5 14.2h.01"/>' },
+  coins:  { name: 'Монеты',       d: '<ellipse cx="9" cy="7.5" rx="5.5" ry="2.5"/><path d="M3.5 7.5v4c0 1.4 2.5 2.5 5.5 2.5M3.5 11.5v4c0 1.4 2.5 2.5 5.5 2.5"/><ellipse cx="15.5" cy="13" rx="5" ry="2.3"/><path d="M10.5 13v4c0 1.3 2.2 2.3 5 2.3s5-1 5-2.3v-4"/>' },
+  piggy:  { name: 'Копилка',      d: '<path d="M19 11.5c0-3.6-3.3-6-7.3-6-4.2 0-7.2 2.7-7.2 6.3 0 1.9.9 3.4 2.3 4.5V19h2.6v-1.6c.8.2 1.5.3 2.4.3s1.6-.1 2.4-.3V19h2.6v-2.4c.9-.6 1.6-1.4 2-2.3H21v-3h-2Z"/><path d="M9.5 5.9a2.5 2.5 0 1 1 4.6-.6M15.8 10.2h.01"/>' },
+  safe:   { name: 'Сейф',         d: '<rect x="3.5" y="4" width="17" height="15" rx="2.5"/><circle cx="12" cy="11.5" r="3.4"/><path d="M12 8.1v1.2M12 13.7v1.2M8.6 11.5h1.2M14.2 11.5h1.2M6.5 19v1.5M17.5 19v1.5"/>' },
+  phone:  { name: 'Эл. кошелёк',  d: '<rect x="6.5" y="2.8" width="11" height="18.4" rx="2.5"/><path d="M10.5 18h3"/><path d="M12 7.5v6M14 9a2 1.6 0 0 0-2-1.2c-1.1 0-2 .6-2 1.4s.9 1.2 2 1.4 2 .6 2 1.4-.9 1.4-2 1.4a2 1.6 0 0 1-2-1.2"/>' },
+  growth: { name: 'Вклад',        d: '<path d="M3.5 18.5h17"/><path d="M5 15l4.5-4.5 3.5 3 6-6.5"/><path d="M14.5 7H19v4.5"/>' },
+  crypto: { name: 'Крипта',       d: '<circle cx="12" cy="12" r="8.5"/><path d="M9.8 7.5v9M9.8 8h3.4a2 2 0 0 1 0 4H9.8h3.9a2.1 2.1 0 0 1 0 4.2H9.8M11.2 6.5v1.5M11.2 16.2v1.4"/>' },
+  home:   { name: 'Дом',          d: '<path d="M4 11 12 4.5l8 6.5"/><path d="M6 9.6V19.5h12V9.6"/><path d="M10 19.5v-5h4v5"/>' },
+  travel: { name: 'Путешествия',  d: '<path d="M10.5 13.5 4 11.2l1.3-1.3 7 .4 4.4-4.4a1.8 1.8 0 0 1 2.5 2.5l-4.4 4.4.4 7-1.3 1.3-2.3-6.5-3 3 .3 2.2-1 1-1.4-2.9-2.9-1.4 1-1 2.2.3 3-3Z"/>' },
+  gift:   { name: 'Подарки',      d: '<rect x="4" y="9" width="16" height="11" rx="1.5"/><path d="M3 9h18M12 9v11"/><path d="M12 9c-1-3-5.5-4.2-5.5-1.6C6.5 9 12 9 12 9Zm0 0c1-3 5.5-4.2 5.5-1.6C17.5 9 12 9 12 9Z"/>' },
+  work:   { name: 'Работа',       d: '<rect x="3" y="7.5" width="18" height="12" rx="2.5"/><path d="M8.5 7.5V6a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v1.5M3 12.5h18M11 12.5v2h2v-2"/>' },
+};
+// Цвета счетов: насыщенные, в духе темы (кобальт, небо, бирюза) плюс несколько тёплых
+const ACC_COLORS = ['#1a3fd0', '#1f78f0', '#12a6ff', '#0aa6b8', '#13996f', '#5a46e0', '#9b3fd0', '#d93a76', '#e8573a', '#f09a1a', '#3e5878', '#0b1f66'];
+
+function shadeHex(hex, amt) { // amt > 0 — светлее, < 0 — темнее
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
+  if (!m) return hex;
+  const n = parseInt(m[1], 16), t = amt < 0 ? 0 : 255, k = Math.abs(amt);
+  const ch = sh => Math.round(((n >> sh) & 255) * (1 - k) + t * k);
+  return '#' + [16, 8, 0].map(sh => ch(sh).toString(16).padStart(2, '0')).join('');
+}
+function accSVG(key, color) {
+  const ic = ACC_ICONS[key], c = /^#[0-9a-f]{6}$/i.test(color || '') ? color : ACC_COLORS[0];
+  const g = 'ag-' + key + '-' + c.slice(1);
+  return `<svg class="bi" viewBox="0 0 48 48" aria-label="${ic.name}"><defs><linearGradient id="${g}" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="${shadeHex(c, .32)}"/><stop offset=".55" stop-color="${c}"/><stop offset="1" stop-color="${shadeHex(c, -.28)}"/></linearGradient></defs>
+    <circle cx="24" cy="24" r="24" fill="url(#${g})"/><circle cx="24" cy="24" r="21" fill="none" stroke="#fff" stroke-opacity=".38" stroke-width="1"/>
+    <g transform="translate(10 10) scale(1.17)" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${ic.d}</g></svg>`;
+}
+const isAccIco = icon => typeof icon === 'string' && icon.startsWith('ai:') && ACC_ICONS[icon.slice(3)];
+
 const isBrand = icon => typeof icon === 'string' && icon.startsWith('bi:') && BRAND_ICONS[icon.slice(3)];
-// Иконка счёта: эмодзи или картинка. inline — маленькая, рядом с текстом
-function accIcon(icon, inline) {
-  if (isBrand(icon)) return inline ? `<span class="bi-inline">${brandSVG(icon.slice(3))}</span>` : brandSVG(icon.slice(3));
+// Иконка счёта: рисунок (ai:), банк/валюта (bi:) или эмодзи. inline — маленькая, рядом с текстом
+function accIcon(icon, inline, color) {
+  const svg = isAccIco(icon) ? accSVG(icon.slice(3), color) : isBrand(icon) ? brandSVG(icon.slice(3)) : null;
+  if (svg) return inline ? `<span class="bi-inline">${svg}</span>` : svg;
   return esc(icon);
 }
-const accIconText = icon => isBrand(icon) ? '' : icon + ' ';
-const accIcoStyle = a => isBrand(a.icon) ? 'background:none' : `background:${a.color}33`;
+const accIconText = icon => isBrand(icon) || isAccIco(icon) ? '' : icon + ' ';
+const accIcoStyle = a => isBrand(a.icon) || isAccIco(a.icon) ? 'background:none;box-shadow:none' : `--c:${a.color}`;
+// Выбор иконки счёта: рисунки в цвете счёта, банки и валюты, эмодзи
+function accIconPicker(s, act, emojis) {
+  return `<div class="icon-pick brands">${Object.keys(ACC_ICONS).map(k => `<button class="${s.icon === 'ai:' + k ? 'on' : ''}" data-act="${act}" data-v="ai:${k}" title="${ACC_ICONS[k].name}">${accSVG(k, s.color)}</button>`).join('')}</div>
+    <div class="icon-pick brands">${Object.keys(BRAND_ICONS).map(k => `<button class="${s.icon === 'bi:' + k ? 'on' : ''}" data-act="${act}" data-v="bi:${k}" title="${BRAND_ICONS[k].name}">${brandSVG(k)}</button>`).join('')}</div>
+    <div class="icon-pick">${emojis.map(i => `<button class="${s.icon === i ? 'on' : ''}" data-act="${act}" data-v="${i}">${i}</button>`).join('')}</div>`;
+}
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 function pad(n) { return String(n).padStart(2, '0'); }
@@ -327,23 +371,35 @@ function applyTheme() {
 function renderTabbar() {
   const overdue = state.recurring.length ? overdueList().length + occInRange(today(), today()).filter(o => o.status === 'today').length : 0;
   const tab = (id, icon, label, badge) => `<button class="tab ${ui.tab === id || (id === 'accounts' && (ui.tab === 'settings' || ui.tab === 'vault')) ? 'on' : ''}" data-act="tab" data-v="${id}"><span class="ti">${icon}${badge ? `<b class="badge">${badge}</b>` : ''}</span>${label}</button>`;
+  const ico = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
   return `<nav class="tabbar">
-    ${tab('records', '📒', 'Записи')}${tab('charts', '📊', 'Графики')}
+    ${tab('records', ico('<path d="M4 6h16M4 12h16M4 18h10"/>'), 'Записи')}${tab('charts', ico('<path d="M5 20V10M12 20V4M19 20v-7"/>'), 'Графики')}
     <button class="fab" data-act="new-tx" aria-label="Добавить">+</button>
-    ${tab('recurring', '📅', 'Платежи', overdue)}${tab('accounts', '👛', 'Счета')}
+    ${tab('recurring', ico('<rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 10h16M9 3v4M15 3v4"/>'), 'Платежи', overdue)}${tab('accounts', ico('<rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 10.5h18M16 15h2"/>'), 'Счета')}
   </nav>`;
 }
 
+// Заголовок месяца: крупное название с засечками, год и стрелки справа
 function monthSwitch() {
   return `<div class="month-switch">
-    <button data-act="month" data-v="-1">‹</button><span>${monthLabel(ui.year, ui.month)}</span><button data-act="month" data-v="1">›</button>
+    <h1>${MONTHS[ui.month]}</h1>
+    <div class="ms-nav"><button data-act="month" data-v="-1" aria-label="Предыдущий месяц">‹</button><span>${ui.year}</span><button data-act="month" data-v="1" aria-label="Следующий месяц">›</button></div>
   </div>`;
 }
+
+const lineIco = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+
+// Гжельский цветок — узор на яркой карточке
+const FLOWER = `<svg class="flower" viewBox="0 0 100 100" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.6">
+  <path d="M50 50C38 30 44 12 50 6c6 6 12 24 0 44ZM50 50c20-12 38-6 44 0-6 6-24 12-44 0ZM50 50c12 20 6 38 0 44-6-6-12-24 0-44ZM50 50C30 62 12 56 6 50c6-6 24-12 44 0Z"/>
+  <path d="M50 50c6-14 20-20 28-28M50 50c14 6 20 20 28 28M50 50c-6 14-20 20-28 28M50 50c-14-6-20-20-28-28"/>
+  <circle cx="78" cy="22" r="3"/><circle cx="78" cy="78" r="3"/><circle cx="22" cy="78" r="3"/><circle cx="22" cy="22" r="3"/></g>
+  <circle cx="50" cy="50" r="5" fill="currentColor"/></svg>`;
 
 function accountChips() {
   return `<div class="chips">
     <button class="chip ${!ui.account ? 'on' : ''}" data-act="filter-acc" data-v="">Все счета</button>
-    ${state.accounts.map(a => `<button class="chip ${ui.account === a.id ? 'on' : ''}" data-act="filter-acc" data-v="${a.id}">${accIcon(a.icon, true)} ${esc(a.name)}</button>`).join('')}
+    ${state.accounts.map(a => `<button class="chip ${ui.account === a.id ? 'on' : ''}" data-act="filter-acc" data-v="${a.id}">${accIcon(a.icon, true, a.color)} ${esc(a.name)}</button>`).join('')}
   </div>`;
 }
 
@@ -373,12 +429,12 @@ function renderRecords() {
 
   return `
     <div class="topbar">${monthSwitch()}</div>
-    ${accountChips()}
-    <div class="card summary">
-      <div class="stat big"><div class="label">Итого за месяц${ui.account ? '' : ' (в ' + base() + ')'}</div><div class="val ${inc - exp >= 0 ? 'income' : 'expense'}">${fmt(inc - exp, vc, true)}</div></div>
-      <div class="stat"><div class="label">Расходы</div><div class="val expense">${fmt(exp, vc)}</div></div>
-      <div class="stat"><div class="label">Доходы</div><div class="val income">${fmt(inc, vc)}</div></div>
+    <div class="hero">${FLOWER}
+      <div class="label">Итог за месяц · ${vc}</div>
+      <div class="big">${fmt(inc - exp, vc, true)}</div>
+      <div class="pills"><div>Расходы<b>${fmt(exp, vc)}</b></div><div>Доходы<b>${fmt(inc, vc)}</b></div></div>
     </div>
+    ${accountChips()}
     ${days.length ? days.map(d => {
       const items = byDay[d].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
       const s = sums(items, ui.account);
@@ -413,7 +469,7 @@ function txRow(t) {
   }
   const c = catById(t.categoryId) || { icon: '❔', name: 'Без категории', color: '#90a4ae' };
   return `<button class="row" data-act="edit-tx" data-v="${t.id}">
-    <div class="ico" style="background:${c.color}33">${c.icon}</div>
+    <div class="ico" style="--c:${c.color}">${c.icon}</div>
     <div class="mid"><div class="title">${esc(t.note || c.name)}</div><div class="sub">${t.recurringId ? '🔁 ' : ''}${t.note ? esc(c.name) + ' · ' : ''}${esc(a?.name || '?')}</div></div>
     <div class="amt ${t.type}">${fmt(t.type === 'expense' ? -t.amount : t.amount, currency, true)}</div>
   </button>`;
@@ -467,7 +523,7 @@ function renderCharts() {
   const color = ui.chartType === 'expense' ? 'var(--expense)' : 'var(--income)';
 
   return `
-    <div class="topbar">${isYear ? `<div class="month-switch"><button data-act="year" data-v="-1">‹</button><span>${ui.year}</span><button data-act="year" data-v="1">›</button></div>` : monthSwitch()}</div>
+    <div class="topbar">${isYear ? `<div class="month-switch"><h1>${ui.year}</h1><div class="ms-nav"><button data-act="year" data-v="-1" aria-label="Предыдущий год">‹</button><span>год</span><button data-act="year" data-v="1" aria-label="Следующий год">›</button></div></div>` : monthSwitch()}</div>
     <div class="seg">
       <button class="${!isYear ? 'on' : ''}" data-act="chart-period" data-v="month">Месяц</button>
       <button class="${isYear ? 'on' : ''}" data-act="chart-period" data-v="year">Год</button>
@@ -484,7 +540,7 @@ function renderCharts() {
         <div class="donut-wrap">${donut(cats.map(x => ({ v: x.v, color: x.c.color })))}
           <div class="donut-center"><div class="muted small">${typeName}</div><div class="val">${fmt(total, vc)}</div></div></div>
         <div class="legend">${cats.map(x => `<div class="row">
-          <div class="ico" style="background:${x.c.color}33">${x.c.icon}</div>
+          <div class="ico" style="--c:${x.c.color}">${x.c.icon}</div>
           <div class="mid"><div class="title">${esc(x.c.name)} <span class="muted small">${(x.v / total * 100).toFixed(1)}%</span></div>
             <div class="bar-track"><div class="bar-fill" style="width:${x.v / cats[0].v * 100}%;background:${x.c.color}"></div></div></div>
           <div class="amt">${fmt(x.v, vc)}</div></div>`).join('')}</div>`
@@ -602,15 +658,19 @@ function renderAccounts() {
   const byCur = {};
   for (const a of state.accounts) byCur[a.currency] = (byCur[a.currency] || 0) + balanceOf(a);
   return `
-    <div class="topbar"><h1>Счета</h1><div><button class="link" data-act="new-transfer">🔁 Перевод</button><button class="link gear" data-act="open-vault" aria-label="Копилка">🐷</button><button class="link gear" data-act="tab" data-v="settings" aria-label="Настройки">⚙️</button></div></div>
-    <div class="card">
-      <div class="stat big"><div class="label">Всего (≈ в ${base()})</div><div class="val">${fmt(total, base())}</div></div>
-      <div class="chips" style="margin-top:10px;padding-bottom:2px">${Object.entries(byCur).map(([c, v]) => `<span class="chip">${fmt(v, c)}</span>`).join('')}</div>
+    <div class="topbar"><h1>Счета</h1><div class="top-actions">
+      <button class="icon-btn" data-act="new-transfer" aria-label="Перевод">${lineIco('<path d="M4 8h15l-3.5-3.5M20 16H5l3.5 3.5"/>')}</button>
+      <button class="icon-btn" data-act="open-vault" aria-label="Копилка">${lineIco(ACC_ICONS.piggy.d)}</button>
+      <button class="icon-btn" data-act="tab" data-v="settings" aria-label="Настройки">${lineIco('<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="6.6"/><path d="M12 2.5v2.9M12 18.6v2.9M2.5 12h2.9M18.6 12h2.9M5.3 5.3l2 2M16.7 16.7l2 2M5.3 18.7l2-2M16.7 7.3l2-2"/>')}</button></div></div>
+    <div class="hero">${FLOWER}
+      <div class="label">Всего · ≈ в ${base()}</div>
+      <div class="big">${fmt(total, base())}</div>
+      <div class="pills wrap">${Object.entries(byCur).map(([c, v]) => `<div>${c}<b>${fmt(v, c)}</b></div>`).join('')}</div>
     </div>
     ${state.accounts.map(a => {
       const b = balanceOf(a);
       return `<button class="acc-card" data-act="edit-acc" data-v="${a.id}">
-        <div class="ico" style="${accIcoStyle(a)}">${accIcon(a.icon)}</div>
+        <div class="ico" style="${accIcoStyle(a)}">${accIcon(a.icon, false, a.color)}</div>
         <div class="mid" style="flex:1;min-width:0"><div class="title" style="font-weight:600">${esc(a.name)}</div><div class="muted small">${a.currency}</div></div>
         <div class="bal"><div class="${b < 0 ? 'expense' : ''}">${fmt(b, a.currency)}</div>${a.currency !== base() ? `<div class="muted small">≈ ${fmt(convert(b, a.currency, base()), base())}</div>` : ''}</div>
       </button>`;
@@ -777,7 +837,7 @@ function sheetTx() {
       <div class="field"><label>Куда</label><select data-change="tx-to">${accOptions(s.toAccountId)}</select></div>
     ` : `
       <div class="cat-grid">${cats.map(c => `<button class="cat ${s.categoryId === c.id ? 'on' : ''}" data-act="tx-cat" data-v="${c.id}">
-        <div class="ico" style="background:${c.color}33">${c.icon}</div><span>${esc(c.name)}</span></button>`).join('')}</div>
+        <div class="ico" style="--c:${c.color}">${c.icon}</div><span>${esc(c.name)}</span></button>`).join('')}</div>
     `}
     <div class="btn-row">
       ${isTransfer ? '' : `<div class="field compact"><select data-change="tx-acc">${accOptions(s.accountId)}</select></div>`}
@@ -847,7 +907,7 @@ function sheetAcc() {
   const s = ui.sheet;
   return `
     <div class="sheet-head"><button class="link" data-act="close">Отмена</button><h2>${s.id ? 'Счёт' : 'Новый счёт'}</h2><button class="link" data-act="save-acc">Готово</button></div>
-    <div style="display:flex;justify-content:center;margin-bottom:10px"><div class="ico" style="width:64px;height:64px;font-size:32px;${accIcoStyle(s)}">${accIcon(s.icon)}</div></div>
+    <div style="display:flex;justify-content:center;margin-bottom:10px"><div class="ico" style="width:64px;height:64px;font-size:32px;${accIcoStyle(s)}">${accIcon(s.icon, false, s.color)}</div></div>
     <div class="field"><label>Название</label><input type="text" value="${esc(s.name)}" placeholder="Например, Карта Тинькофф" data-input="acc-name"></div>
     <div class="field"><label>Валюта</label><select data-change="acc-cur">${state.currencies.map(c => `<option value="${c.code}" ${c.code === s.currency ? 'selected' : ''}>${c.code} · ${esc(c.name)}</option>`).join('')}</select></div>
     <div class="field"><label>Начальный баланс</label><input type="text" inputmode="decimal" value="${esc(s.initial)}" data-input="acc-initial"></div>
@@ -855,10 +915,9 @@ function sheetAcc() {
       <button class="link" data-act="adjust" data-v="${s.id}">Изменить</button></div>
       <div class="muted small" style="margin:0 6px 10px">«Изменить» — указать, сколько на счёте на самом деле. Начальный баланс меняет всю историю счёта.</div>` : ''}
     <div class="section-title">Иконка</div>
-    <div class="icon-pick brands">${Object.keys(BRAND_ICONS).map(k => `<button class="${s.icon === 'bi:' + k ? 'on' : ''}" data-act="acc-icon" data-v="bi:${k}" title="${BRAND_ICONS[k].name}">${brandSVG(k)}</button>`).join('')}</div>
-    <div class="icon-pick">${ICONS.map(i => `<button class="${s.icon === i ? 'on' : ''}" data-act="acc-icon" data-v="${i}">${i}</button>`).join('')}</div>
+    ${accIconPicker(s, 'acc-icon', ICONS)}
     <div class="section-title">Цвет</div>
-    <div class="color-pick">${COLORS.map(c => `<button class="${s.color === c ? 'on' : ''}" style="background:${c}" data-act="acc-color" data-v="${c}"></button>`).join('')}</div>
+    <div class="color-pick">${[...new Set([...ACC_COLORS, ...COLORS])].map(c => `<button class="${s.color === c ? 'on' : ''}" style="background:${c}" data-act="acc-color" data-v="${c}"></button>`).join('')}</div>
     <button class="btn" data-act="save-acc">Сохранить</button>
     ${s.id ? `<button class="btn danger" data-act="del-acc">Удалить счёт</button>` : ''}
   `;
@@ -924,7 +983,7 @@ function sheetCats() {
   return `
     <div class="sheet-head"><span></span><h2>Категории: ${s.type === 'expense' ? 'расходы' : 'доходы'}</h2><button class="link" data-act="close">Готово</button></div>
     <div class="list">${cats.map((c, i) => `<div class="row">
-      <div class="ico" style="background:${c.color}33">${c.icon}</div>
+      <div class="ico" style="--c:${c.color}">${c.icon}</div>
       <button class="mid" style="text-align:left" data-act="edit-cat" data-v="${c.id}"><div class="title">${esc(c.name)}</div></button>
       <button class="link" data-act="cat-up" data-v="${c.id}" ${i === 0 ? 'disabled style="opacity:.3"' : ''}>↑</button>
       <button class="chev" data-act="edit-cat" data-v="${c.id}">›</button></div>`).join('')}</div>
@@ -936,7 +995,7 @@ function sheetCat() {
   const s = ui.sheet;
   return `
     <div class="sheet-head"><button class="link" data-act="back-cats">Назад</button><h2>${s.id ? 'Категория' : 'Новая категория'}</h2><button class="link" data-act="save-cat">Готово</button></div>
-    <div style="display:flex;justify-content:center;margin-bottom:10px"><div class="ico" style="width:64px;height:64px;font-size:32px;background:${s.color}33">${s.icon}</div></div>
+    <div style="display:flex;justify-content:center;margin-bottom:10px"><div class="ico" style="width:64px;height:64px;font-size:32px;--c:${s.color}">${s.icon}</div></div>
     <div class="field"><label>Название</label><input type="text" value="${esc(s.name)}" data-input="cat-name"></div>
     <div class="section-title">Иконка</div>
     <div class="icon-pick">${ICONS.map(i => `<button class="${s.icon === i ? 'on' : ''}" data-act="cat-icon" data-v="${i}">${i}</button>`).join('')}</div>
@@ -1102,7 +1161,7 @@ function occRow(o, showDate) {
   const dl = showDate ? `${parseD(date).getDate()} ${MONTHS_GEN[parseD(date).getMonth()]}, ${WEEKDAYS[parseD(date).getDay()]}` : '';
   const actionable = status === 'overdue' || status === 'today' || status === 'upcoming';
   return `<div class="row occ ${status}">
-    <div class="ico" style="background:${c.color}33">${c.icon}</div>
+    <div class="ico" style="--c:${c.color}">${c.icon}</div>
     <button class="mid" style="text-align:left" data-act="edit-rec" data-v="${r.id}">
       <div class="title">${esc(r.name || c.name)}</div>
       <div class="sub">${[dl, label ? `<b class="st-${status}">${label}</b>` : '', esc(a?.name || '?')].filter(Boolean).join(' · ')}</div>
@@ -1168,7 +1227,7 @@ function renderRecurring() {
       const c = recCat(r); const a = acc(r.accountId);
       const next = occurrences(r, today(), addDays(today(), 800)).find(d => !['paid', 'skipped'].includes(occStatus(r, d)));
       return `<button class="row" data-act="edit-rec" data-v="${r.id}">
-        <div class="ico" style="background:${c.color}33">${c.icon}</div>
+        <div class="ico" style="--c:${c.color}">${c.icon}</div>
         <div class="mid"><div class="title">${esc(r.name || c.name)}${r.auto ? ' <span class="small muted">· авто</span>' : ''}</div>
           <div class="sub">${freqText(r)} · ${next ? 'след. ' + parseD(next).getDate() + ' ' + MONTHS_GEN[parseD(next).getMonth()] : 'завершён'}</div></div>
         <div class="amt ${r.type}">${fmt(r.type === 'expense' ? -r.amount : r.amount, a?.currency || base(), true)}</div>
@@ -1191,7 +1250,7 @@ function sheetRec() {
     <div class="field"><label>Сумма</label><input type="text" inputmode="decimal" value="${esc(s.amount)}" placeholder="0" data-input="rec-amount"><span class="muted">${esc(cur(a?.currency).symbol)}</span></div>
     <div class="field"><label>Счёт</label><select data-change="rec-acc">${state.accounts.map(x => `<option value="${x.id}" ${x.id === s.accountId ? 'selected' : ''}>${accIconText(x.icon)}${esc(x.name)} (${x.currency})</option>`).join('')}</select></div>
     <div class="cat-grid">${cats.map(c => `<button class="cat ${s.categoryId === c.id ? 'on' : ''}" data-act="rec-cat" data-v="${c.id}">
-      <div class="ico" style="background:${c.color}33">${c.icon}</div><span>${esc(c.name)}</span></button>`).join('')}</div>
+      <div class="ico" style="--c:${c.color}">${c.icon}</div><span>${esc(c.name)}</span></button>`).join('')}</div>
     <div class="section-title">Расписание</div>
     <div class="field"><label>Повтор</label><select data-change="rec-preset">${REPEAT_PRESETS.map(p => `<option value="${p.id}" ${repeatPresetOf(s) === p.id ? 'selected' : ''}>${p.label}</option>`).join('')}<option value="custom" ${repeatPresetOf(s) === 'custom' ? 'selected' : ''}>Настроить…</option></select></div>
     ${repeatPresetOf(s) === 'custom' ? `
@@ -1308,7 +1367,7 @@ function sheetAdjust() {
   return `
     <div class="sheet-head"><button class="link" data-act="close">Отмена</button><h2>Баланс счёта</h2><button class="link" data-act="save-adjust">Готово</button></div>
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-      <div class="ico" style="${accIcoStyle(a)}">${accIcon(a.icon)}</div><div><b>${esc(a.name)}</b><div class="muted small">${c}</div></div></div>
+      <div class="ico" style="${accIcoStyle(a)}">${accIcon(a.icon, false, a.color)}</div><div><b>${esc(a.name)}</b><div class="muted small">${c}</div></div></div>
     <div class="field"><label>На дату</label><input type="date" value="${s.date}" data-change="adj-date"></div>
     <div class="field"><label>По записям</label><b style="flex:1;text-align:right">${fmt(before, c)}</b></div>
     <div class="amount-label">Сколько на самом деле</div>
@@ -1468,11 +1527,12 @@ function renderVault() {
     body = `
       <div class="chips">${state.currencies.map(c => `<button class="chip ${c.code === view ? 'on' : ''}" data-act="v-view" data-v="${c.code}">в ${c.code}</button>`).join('')}</div>
       ${needCheck ? `<div class="note-box remind">📝 Пора внести суммы за ${MONTHS[new Date().getMonth()].toLowerCase()}.<button class="btn" data-act="v-new-snap">Внести суммы</button></div>` : ''}
-      <div class="card">
-        <div class="stat big"><div class="label">Сбережения${last ? ' на ' + dayLabel(last.date).replace(/^(Сегодня|Вчера), /, '') : ''}</div><div class="val">${fmt(total, view)}</div></div>
-        ${ex ? `<div class="${ex.total >= 0 ? 'income' : 'expense'}" style="font-weight:700;margin-top:4px">${fmt(ex.total, view, true)} (${pct(ex.total, vTotal(prev, view)).toFixed(1)}%) <span class="muted small" style="font-weight:400">с ${parseD(prev.date).getDate()} ${MONTHS_GEN[parseD(prev.date).getMonth()]}</span></div>` : ''}
-        ${!last ? '<div class="muted small" style="margin-top:6px">Сумм ещё нет — нажмите «Внести суммы».</div>' : ''}
-        <button class="btn ${needCheck ? 'ghost' : ''}" data-act="v-new-snap" style="margin-top:12px">📝 Внести суммы</button>
+      <div class="hero">${FLOWER}
+        <div class="label">Сбережения${last ? ' на ' + dayLabel(last.date).replace(/^(Сегодня|Вчера), /, '') : ''}</div>
+        <div class="big">${fmt(total, view)}</div>
+        ${ex ? `<div class="hero-note"><b>${fmt(ex.total, view, true)} (${pct(ex.total, vTotal(prev, view)).toFixed(1)}%)</b> с ${parseD(prev.date).getDate()} ${MONTHS_GEN[parseD(prev.date).getMonth()]}</div>` : ''}
+        ${!last ? '<div class="hero-note">Сумм ещё нет — нажмите «Внести суммы».</div>' : ''}
+        <button class="hero-btn" data-act="v-new-snap">📝 Внести суммы</button>
       </div>
 
       ${goalsCard()}
@@ -1509,7 +1569,7 @@ function renderVault() {
   }
   return `
     <div class="topbar"><button class="link" data-act="tab" data-v="accounts">‹ Счета</button><h1>🐷 Копилка</h1>
-      <div><button class="link" data-act="v-settings" aria-label="Настройки копилки">⚙️</button><button class="link" data-act="v-lock" aria-label="Закрыть">🔒</button></div></div>
+      <div class="top-actions"><button class="icon-btn" data-act="v-settings" aria-label="Настройки копилки">${lineIco('<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="6.6"/><path d="M12 2.5v2.9M12 18.6v2.9M2.5 12h2.9M18.6 12h2.9M5.3 5.3l2 2M16.7 16.7l2 2M5.3 18.7l2-2M16.7 7.3l2-2"/>')}</button><button class="icon-btn" data-act="v-lock" aria-label="Закрыть копилку">${lineIco('<rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3M12 14.5v2.5"/>')}</button></div></div>
     ${body}`;
 }
 
@@ -1518,7 +1578,7 @@ function vAccRow(a, last, prev, view) {
   const p = prev?.values?.[a.id];
   const d = v != null && p != null ? v - p : null;
   return `<button class="row" data-act="v-edit-acc" data-v="${a.id}">
-    <div class="ico" style="${accIcoStyle(a)}">${accIcon(a.icon)}</div>
+    <div class="ico" style="${accIcoStyle(a)}">${accIcon(a.icon, false, a.color)}</div>
     <div class="mid"><div class="title">${esc(a.name)}</div><div class="sub">${a.currency}${a.note ? ' · ' + esc(a.note) : ''}${d ? ` · <span class="${d > 0 ? 'income' : 'expense'}">${fmt(d, a.currency, true)}</span>` : ''}</div></div>
     <div class="amt">${v != null ? fmt(v, a.currency) : '<span class="muted">—</span>'}${v && a.currency !== view ? `<div class="sub">≈ ${fmt(vConv(v, a.currency, view, last), view)}</div>` : ''}</div>
   </button>`;
@@ -1608,7 +1668,7 @@ function sheetVSnap() {
     <div class="sheet-head"><button class="link" data-act="close">Отмена</button><h2>${s.id ? 'Сверка' : 'Внести суммы'}</h2><button class="link" data-act="v-save-snap">Готово</button></div>
     <div class="field"><label>На дату</label><input type="date" value="${s.date}" data-change="vs-date"></div>
     <div class="section-title">Сколько на счетах</div>
-    ${accs.map(a => `<div class="field"><div class="ico" style="width:30px;height:30px;font-size:16px;${accIcoStyle(a)}">${accIcon(a.icon)}</div><label style="min-width:0;flex:1;color:var(--text)">${esc(a.name)}</label>
+    ${accs.map(a => `<div class="field"><div class="ico" style="width:30px;height:30px;font-size:16px;${accIcoStyle(a)}">${accIcon(a.icon, false, a.color)}</div><label style="min-width:0;flex:1;color:var(--text)">${esc(a.name)}</label>
       <input type="text" inputmode="decimal" value="${esc(s.values[a.id])}" placeholder="0" data-input="vs-val" data-id="${a.id}" style="max-width:45%"><span class="muted">${esc(cur(a.currency).symbol)}</span></div>`).join('')}
     <div class="muted small" style="margin:0 6px 8px">Подставлены суммы прошлой сверки — поменяйте те, что изменились.</div>
     <div class="section-title">Курсы на эту дату</div>
@@ -1653,7 +1713,7 @@ async function vSaveSnap() {
 
 function vAccSheetOpen(id) {
   const a = id ? vAcc(id) : null;
-  openSheet({ kind: 'vacc', id: a?.id || null, name: a?.name || '', currency: a?.currency || base(), icon: a?.icon || 'bi:' + base().toLowerCase(), color: a?.color || '#ffb74d', note: a?.note || '', archived: !!a?.archived });
+  openSheet({ kind: 'vacc', id: a?.id || null, name: a?.name || '', currency: a?.currency || base(), icon: a?.icon || 'bi:' + base().toLowerCase(), color: a?.color || ACC_COLORS[(vault.data.accounts.length + 1) % ACC_COLORS.length], note: a?.note || '', archived: !!a?.archived });
 }
 
 function sheetVAcc() {
@@ -1662,14 +1722,15 @@ function sheetVAcc() {
   const hist = s.id ? vSnaps().filter(x => x.values?.[s.id] != null) : [];
   return `
     <div class="sheet-head"><button class="link" data-act="close">Отмена</button><h2>${s.id ? 'Счёт копилки' : 'Новый счёт'}</h2><button class="link" data-act="v-save-acc">Готово</button></div>
-    <div style="display:flex;justify-content:center;margin-bottom:10px"><div class="ico" style="width:64px;height:64px;font-size:32px;${accIcoStyle(s)}">${accIcon(s.icon)}</div></div>
+    <div style="display:flex;justify-content:center;margin-bottom:10px"><div class="ico" style="width:64px;height:64px;font-size:32px;${accIcoStyle(s)}">${accIcon(s.icon, false, s.color)}</div></div>
     <div class="field"><label>Название</label><input type="text" value="${esc(s.name)}" placeholder="Например, Вклад BIDV" data-input="va-name"></div>
     <div class="field"><label>Валюта</label><select data-change="va-cur" ${used ? 'disabled' : ''}>${state.currencies.map(c => `<option value="${c.code}" ${c.code === s.currency ? 'selected' : ''}>${c.code} · ${esc(c.name)}</option>`).join('')}</select></div>
     ${used ? '<div class="muted small" style="margin:0 6px 8px">Валюту нельзя поменять: по счёту уже есть суммы.</div>' : ''}
     <div class="field"><label>Заметка</label><input type="text" value="${esc(s.note)}" placeholder="например, 7% годовых до мая" data-input="va-note"></div>
     <div class="section-title">Иконка</div>
-    <div class="icon-pick brands">${Object.keys(BRAND_ICONS).map(k => `<button class="${s.icon === 'bi:' + k ? 'on' : ''}" data-act="va-icon" data-v="bi:${k}">${brandSVG(k)}</button>`).join('')}</div>
-    <div class="icon-pick">${['🏦', '💰', '💵', '🪙', '🐷', '📈', '🏠', '🚗', '💎', '🥇', '₿', '🔒'].map(i => `<button class="${s.icon === i ? 'on' : ''}" data-act="va-icon" data-v="${i}">${i}</button>`).join('')}</div>
+    ${accIconPicker(s, 'va-icon', ['🏦', '💰', '💵', '🪙', '🐷', '📈', '🏠', '🚗', '💎', '🥇', '₿', '🔒'])}
+    <div class="section-title">Цвет</div>
+    <div class="color-pick">${ACC_COLORS.map(c => `<button class="${s.color === c ? 'on' : ''}" style="background:${c}" data-act="va-color" data-v="${c}"></button>`).join('')}</div>
     ${hist.length >= 2 ? `<div class="section-title">История</div><div class="card">${lineChart(hist.map(x => ({ label: shortDateLabel(x.date), v: x.values[s.id] })), s.currency, { tight: true })}</div>` : ''}
     ${hist.length ? `<div class="list">${[...hist].reverse().map((x, i, arr) => { const p = arr[i + 1]?.values[s.id]; const d = p != null ? x.values[s.id] - p : null;
       return `<div class="row"><div class="mid"><div class="title">${dayLabel(x.date).replace(/^(Сегодня|Вчера), /, '')}</div></div><div class="amt">${fmt(x.values[s.id], s.currency)}${d ? `<div class="sub ${d > 0 ? 'income' : 'expense'}">${fmt(d, s.currency, true)}</div>` : ''}</div></div>`; }).join('')}</div>` : ''}
@@ -1736,6 +1797,7 @@ const vaultActions = {
   'v-new-acc': () => vAccSheetOpen(null),
   'v-edit-acc': v => vAccSheetOpen(v),
   'va-icon': v => { ui.sheet.icon = v; render(); },
+  'va-color': v => { ui.sheet.color = v; render(); },
   'va-archive': () => { ui.sheet.archived = !ui.sheet.archived; vSaveAcc(); },
   'v-save-acc': () => vSaveAcc(),
   'v-del-acc': async () => {
@@ -1842,7 +1904,7 @@ function sheetVGoal() {
     <div class="section-title">Какие счета считаются</div>
     <div class="chips" style="flex-wrap:wrap;margin:0;padding:0 0 10px">
       <button class="chip ${all ? 'on' : ''}" data-act="vg-acc" data-v="">Все счета копилки</button>
-      ${vault.data.accounts.filter(a => !a.archived).map(a => `<button class="chip ${s.accountIds.includes(a.id) ? 'on' : ''}" data-act="vg-acc" data-v="${a.id}">${accIcon(a.icon, true)} ${esc(a.name)}</button>`).join('')}
+      ${vault.data.accounts.filter(a => !a.archived).map(a => `<button class="chip ${s.accountIds.includes(a.id) ? 'on' : ''}" data-act="vg-acc" data-v="${a.id}">${accIcon(a.icon, true, a.color)} ${esc(a.name)}</button>`).join('')}
     </div>
     <div class="section-title">Иконка</div>
     <div class="icon-pick">${GOAL_ICONS.map(i => `<button class="${s.icon === i ? 'on' : ''}" data-act="vg-icon" data-v="${i}">${i}</button>`).join('')}</div>
@@ -2169,7 +2231,7 @@ const actions = {
   'save-tx': () => saveTx(),
   'del-tx': () => { if (!confirm('Удалить запись?')) return; state.transactions = state.transactions.filter(t => t.id !== ui.sheet.id); save(); closeSheet(); toast('Удалено'); },
 
-  'new-acc': () => openSheet({ kind: 'acc', id: null, name: '', currency: base(), initial: '0', icon: '💳', color: COLORS[state.accounts.length % COLORS.length] }),
+  'new-acc': () => openSheet({ kind: 'acc', id: null, name: '', currency: base(), initial: '0', icon: 'ai:card', color: ACC_COLORS[state.accounts.length % ACC_COLORS.length] }),
   'edit-acc': v => { const a = acc(v); openSheet({ kind: 'acc', ...a, initial: String(a.initial) }); },
   'acc-icon': v => { ui.sheet.icon = v; render(); },
   'acc-color': v => { ui.sheet.color = v; render(); },

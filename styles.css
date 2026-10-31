@@ -1,48 +1,71 @@
-/* Тема: голубая по умолчанию, оранжевая — в настройках (data-accent="orange") */
+/* Тема «Морозный фарфор»: кобальт и небесно-голубой, узоры гжели. Оранжевая — data-accent="orange".
+   Цвета — только через переменные ниже; тёмная тема — prefers-color-scheme и data-theme. */
 :root {
-  --bg: #f1f6fc;
+  --bg: #f3f7ff;
+  --bg-grad: linear-gradient(180deg, #d3e5ff 0px, #e8f1ff 280px, #f3f7ff 560px);
   --card: #ffffff;
-  --card-2: #e7f0fa;
-  --text: #1f2a37;
-  --muted: #7d8896;
-  --line: #dfe8f2;
-  --accent: #3b8ef0;
-  --accent-2: #6cc4ff;
-  --accent-soft: #d9eaff;
-  --accent-shadow: rgba(59, 142, 240, .4);
-  --expense: #ef5b6b;
-  --income: #2fb37a;
-  --transfer: #8b6cf0;
-  --shadow: 0 4px 18px rgba(40, 80, 140, .08);
-  --overlay: rgba(10, 25, 45, .35);
-  --radius: 20px;
+  --card-2: #e9f1ff;
+  --text: #0d1a55;
+  --muted: #6472ab;
+  --line: #dfe7fb;
+  --accent: #1844e0;
+  --accent-2: #10a4ff;
+  --accent-soft: #dae6ff;
+  --accent-shadow: rgba(24, 68, 224, .38);
+  --hero: linear-gradient(140deg, #0e28aa 0%, #1a4fea 48%, #10a4ff 100%);
+  --hero-shadow: 0 14px 30px rgba(20, 58, 210, .32);
+  --orn: #2246d8;
+  --ico-ring: #c4d0f6;
+  --ico-bg: #f2f6ff;
+  --expense: #e0294d;
+  --income: #1844e0;
+  --transfer: #7a4fe8;
+  --shadow: 0 6px 20px rgba(24, 60, 190, .08);
+  --overlay: rgba(8, 20, 70, .38);
+  --radius: 22px;
   --tabbar-h: 64px;
+  --serif: ui-serif, "New York", Georgia, "Times New Roman", serif;
   color-scheme: light;
 }
 :root[data-accent="orange"] {
-  --bg: #fff7f2; --card-2: #fff0e8; --text: #2d2a32; --muted: #8e8794; --line: #f1e6df;
-  --accent: #ff8a65; --accent-2: #ffb74d; --accent-soft: #ffe1d6; --accent-shadow: rgba(255, 120, 80, .45);
-  --transfer: #6b8cff; --shadow: 0 4px 18px rgba(120, 80, 60, .08); --overlay: rgba(20, 10, 10, .35);
+  --bg: #fff7f2; --bg-grad: linear-gradient(180deg, #ffe4d6 0px, #fff1e9 280px, #fff7f2 560px);
+  --card-2: #fff0e8; --text: #3a2320; --muted: #957f78; --line: #f3e3da;
+  --accent: #f0612e; --accent-2: #ffb03a; --accent-soft: #ffe1d4; --accent-shadow: rgba(240, 97, 46, .4);
+  --hero: linear-gradient(140deg, #e2481c 0%, #f97a3a 50%, #ffb03a 100%); --hero-shadow: 0 14px 30px rgba(230, 90, 40, .3);
+  --orn: #f0612e; --ico-ring: #f6d3c4; --ico-bg: #fff6f1; --income: #13996f; --transfer: #5b74f0;
+  --shadow: 0 6px 20px rgba(140, 70, 40, .08); --overlay: rgba(40, 15, 5, .35);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0e141c; --card: #18212c; --card-2: #212c39; --text: #eef3f8; --muted: #95a3b2;
-    --line: #2b3847; --accent: #5aa7ff; --accent-2: #7fd0ff; --accent-soft: #1b3350; --accent-shadow: rgba(90, 167, 255, .35);
-    --expense: #ff7a87; --income: #4fd29a; --transfer: #a78bfa; --shadow: 0 4px 18px rgba(0,0,0,.35); --overlay: rgba(0, 0, 0, .5); color-scheme: dark;
+    --bg: #070f2a; --bg-grad: linear-gradient(180deg, #0f1d52 0px, #0a153c 300px, #070f2a 620px);
+    --card: #0f1a46; --card-2: #17245c; --text: #eaefff; --muted: #8f9cd6; --line: #223070;
+    --accent: #4d7dff; --accent-2: #2cc2ff; --accent-soft: #1b2b6c; --accent-shadow: rgba(60, 110, 255, .4);
+    --hero: linear-gradient(140deg, #1a36d4 0%, #2463f6 50%, #1cb1ff 100%); --hero-shadow: 0 14px 34px rgba(30, 80, 240, .38);
+    --orn: #7193ff; --ico-ring: #34438f; --ico-bg: #142056;
+    --expense: #ff6987; --income: #7eaaff; --transfer: #b49cff; --shadow: 0 6px 20px rgba(0, 0, 0, .35); --overlay: rgba(0, 0, 0, .55); color-scheme: dark;
   }
   :root[data-accent="orange"]:not([data-theme="light"]) {
-    --bg: #16141a; --card: #221f27; --card-2: #2b2731; --text: #f3eff6; --muted: #a39cab; --line: #34303b;
-    --accent: #ff9a7a; --accent-2: #ffb74d; --accent-soft: #4a3029; --accent-shadow: rgba(255, 120, 80, .35); --transfer: #8aa4ff;
+    --bg: #17110f; --bg-grad: linear-gradient(180deg, #2c1a12 0px, #1d1411 300px, #17110f 620px);
+    --card: #241a17; --card-2: #2f231f; --text: #fbefe9; --muted: #b19c94; --line: #3b2c27;
+    --accent: #ff7a45; --accent-2: #ffb03a; --accent-soft: #4a2c22; --accent-shadow: rgba(255, 110, 60, .35);
+    --hero: linear-gradient(140deg, #d8441a 0%, #f2733a 50%, #f7a83a 100%); --orn: #ff8a5c; --ico-ring: #4f3a33; --ico-bg: #2c211d;
+    --income: #4fd29a; --transfer: #8aa4ff;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #0e141c; --card: #18212c; --card-2: #212c39; --text: #eef3f8; --muted: #95a3b2;
-  --line: #2b3847; --accent: #5aa7ff; --accent-2: #7fd0ff; --accent-soft: #1b3350; --accent-shadow: rgba(90, 167, 255, .35);
-  --expense: #ff7a87; --income: #4fd29a; --transfer: #a78bfa; --shadow: 0 4px 18px rgba(0,0,0,.35); --overlay: rgba(0, 0, 0, .5); color-scheme: dark;
+  --bg: #070f2a; --bg-grad: linear-gradient(180deg, #0f1d52 0px, #0a153c 300px, #070f2a 620px);
+  --card: #0f1a46; --card-2: #17245c; --text: #eaefff; --muted: #8f9cd6; --line: #223070;
+  --accent: #4d7dff; --accent-2: #2cc2ff; --accent-soft: #1b2b6c; --accent-shadow: rgba(60, 110, 255, .4);
+  --hero: linear-gradient(140deg, #1a36d4 0%, #2463f6 50%, #1cb1ff 100%); --hero-shadow: 0 14px 34px rgba(30, 80, 240, .38);
+  --orn: #7193ff; --ico-ring: #34438f; --ico-bg: #142056;
+  --expense: #ff6987; --income: #7eaaff; --transfer: #b49cff; --shadow: 0 6px 20px rgba(0, 0, 0, .35); --overlay: rgba(0, 0, 0, .55); color-scheme: dark;
 }
 :root[data-theme="dark"][data-accent="orange"] {
-  --bg: #16141a; --card: #221f27; --card-2: #2b2731; --text: #f3eff6; --muted: #a39cab; --line: #34303b;
-  --accent: #ff9a7a; --accent-2: #ffb74d; --accent-soft: #4a3029; --accent-shadow: rgba(255, 120, 80, .35); --transfer: #8aa4ff;
+  --bg: #17110f; --bg-grad: linear-gradient(180deg, #2c1a12 0px, #1d1411 300px, #17110f 620px);
+  --card: #241a17; --card-2: #2f231f; --text: #fbefe9; --muted: #b19c94; --line: #3b2c27;
+  --accent: #ff7a45; --accent-2: #ffb03a; --accent-soft: #4a2c22; --accent-shadow: rgba(255, 110, 60, .35);
+  --hero: linear-gradient(140deg, #d8441a 0%, #f2733a 50%, #f7a83a 100%); --orn: #ff8a5c; --ico-ring: #4f3a33; --ico-bg: #2c211d;
+  --income: #4fd29a; --transfer: #8aa4ff;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -260,3 +283,86 @@ form .field input { text-align: left; }
 /* ключ синхронизации: крупно, моноширинно, переносится по группам */
 .sync-key { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 18px; font-weight: 600; letter-spacing: .5px; line-height: 1.5;
   text-align: center; background: var(--card); border-radius: 14px; padding: 12px; margin: 4px 0 8px; box-shadow: var(--shadow); word-spacing: 4px; user-select: all; -webkit-user-select: all; }
+
+
+/* ================= Оформление «Морозный фарфор» ================= */
+body { background: var(--bg-grad) no-repeat, var(--bg); }
+.screen { padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 40px); }
+
+/* Заголовки с засечками и узор-разделитель под ними */
+.topbar { position: relative; margin-bottom: 26px; }
+.topbar h1, .month-switch h1 { font-family: var(--serif); font-weight: 600; font-size: 30px; letter-spacing: -.3px; margin: 0; }
+.topbar::before, .topbar::after { content: ""; position: absolute; left: 0; right: 0; bottom: -17px; height: 14px; pointer-events: none; }
+.topbar::after {
+  background: linear-gradient(var(--orn), var(--orn)) left center / calc(50% - 30px) 1px no-repeat,
+              linear-gradient(var(--orn), var(--orn)) right center / calc(50% - 30px) 1px no-repeat;
+  opacity: .7;
+}
+.topbar::before {
+  background: var(--orn);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 52 14'%3E%3Cg fill='none' stroke='%23000' stroke-width='1.3'%3E%3Ccircle cx='26' cy='7' r='4'/%3E%3Cpath d='M10 7q8-8 16 0q8 8 16 0'/%3E%3C/g%3E%3Ccircle cx='6' cy='7' r='1.7'/%3E%3Ccircle cx='46' cy='7' r='1.7'/%3E%3C/svg%3E") center / 52px 14px no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 52 14'%3E%3Cg fill='none' stroke='%23000' stroke-width='1.3'%3E%3Ccircle cx='26' cy='7' r='4'/%3E%3Cpath d='M10 7q8-8 16 0q8 8 16 0'/%3E%3C/g%3E%3Ccircle cx='6' cy='7' r='1.7'/%3E%3Ccircle cx='46' cy='7' r='1.7'/%3E%3C/svg%3E") center / 52px 14px no-repeat;
+}
+.month-switch { flex: 1; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.ms-nav { display: flex; align-items: center; gap: 2px; color: var(--accent); font-weight: 600; font-size: 15px; }
+.ms-nav span { min-width: 40px; text-align: center; }
+.ms-nav button, .month-switch button { width: 32px; height: 32px; border-radius: 50%; background: var(--card); box-shadow: var(--shadow); color: var(--accent); font-size: 18px; }
+.sheet-head h2, .card h3 { font-family: var(--serif); font-weight: 600; }
+.card h3 { font-size: 17px; }
+.day-head { font-family: var(--serif); font-style: italic; font-size: 14px; }
+.section-title { color: var(--orn); font-size: 11.5px; letter-spacing: 1.2px; }
+
+/* Яркая карточка-«льдинка» с фарфоровой каймой и цветком */
+.hero { position: relative; overflow: hidden; border-radius: 26px; padding: 18px 18px 16px; margin-bottom: 14px; color: #fff; background: var(--hero); box-shadow: var(--hero-shadow); }
+.hero::after { content: ""; position: absolute; inset: 6px; border-radius: 21px; border: 1px solid rgba(255, 255, 255, .38); pointer-events: none; }
+.hero .flower { position: absolute; right: -26px; top: -26px; width: 150px; height: 150px; color: rgba(255, 255, 255, .34); pointer-events: none; }
+.hero .label { font-size: 11.5px; letter-spacing: 1.3px; text-transform: uppercase; color: rgba(255, 255, 255, .82); position: relative; }
+.hero .big { font-family: var(--serif); font-size: 36px; font-weight: 600; letter-spacing: -.5px; margin: 2px 0 12px; position: relative; word-break: break-word; }
+.hero .pills { display: flex; gap: 10px; position: relative; }
+.hero .pills.wrap { flex-wrap: wrap; }
+.hero .pills > div { flex: 1; min-width: 0; background: rgba(255, 255, 255, .16); border-radius: 14px; padding: 8px 11px; font-size: 12px; color: rgba(255, 255, 255, .85); }
+.hero .pills.wrap > div { flex: 1 1 40%; }
+.hero .pills b { display: block; font-size: 16px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hero-note { position: relative; font-size: 13px; color: rgba(255, 255, 255, .85); margin-top: -4px; }
+.hero-note b { color: #fff; }
+.hero-btn { position: relative; display: block; width: 100%; margin-top: 14px; padding: 12px; border-radius: 14px; background: rgba(255, 255, 255, .2); color: #fff; font-weight: 700; }
+
+/* Карточки и списки: белый фарфор с тонкой кобальтовой линией */
+.card, .list, .acc-card { box-shadow: var(--shadow); border: 1px solid var(--line); }
+.row + .row { border-top-color: color-mix(in srgb, var(--line) 70%, transparent); }
+.ico { box-shadow: inset 0 0 0 1.5px var(--ico-ring); background: var(--ico-bg); }
+.ico[style*="--c:"] { background: color-mix(in srgb, var(--c) 15%, var(--card)); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--c) 42%, transparent); }
+.acc-card { padding: 12px 14px; }
+.acc-card .ico { width: 46px; height: 46px; }
+
+/* Кнопки и переключатели */
+.chip { background: var(--card); border: 1px solid var(--line); box-shadow: none; color: var(--text); }
+.chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn { background: var(--hero); box-shadow: 0 6px 16px var(--accent-shadow); }
+.btn.ghost { background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow); }
+.btn.danger { background: transparent; border: 0; box-shadow: none; }
+.keypad .ok { background: var(--hero); }
+.field { border: 1px solid var(--line); box-shadow: none; }
+form .field { border: 0; }
+.sheet { background: var(--bg-grad) no-repeat, var(--bg); }
+.sheet .grab { background: var(--ico-ring); }
+.goal-bar div { background: var(--hero); }
+
+/* Нижнее меню парит над экраном */
+.tabbar {
+  left: 12px; right: 12px; bottom: calc(env(safe-area-inset-bottom) + 8px); height: var(--tabbar-h); padding-bottom: 0;
+  border-radius: 26px; border: 1px solid var(--line); background: color-mix(in srgb, var(--card) 94%, transparent);
+  box-shadow: 0 10px 30px rgba(20, 50, 160, .16); max-width: 616px; margin: 0 auto;
+}
+.tab { color: var(--muted); }
+.tab .ti { filter: none; opacity: 1; width: 24px; height: 24px; font-size: 0; }
+.tab .ti svg { width: 24px; height: 24px; }
+.tab.on { color: var(--accent); }
+.fab { background: var(--hero); transform: translateY(-20px); box-shadow: 0 0 0 5px var(--bg), 0 0 0 6.5px var(--ico-ring), 0 10px 22px var(--accent-shadow); }
+.badge { font-size: 11px; }
+.toast { bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 30px); }
+
+/* Круглые кнопки-иконки в шапке экрана */
+.top-actions { display: flex; gap: 8px; }
+.icon-btn { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow); color: var(--accent); }
+.icon-btn svg { width: 21px; height: 21px; }

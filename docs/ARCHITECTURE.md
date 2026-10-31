@@ -10,13 +10,22 @@
 |---|---|
 | `index.html` | каркас страницы, подключает `styles.css?v=N` и `app.js?v=N` |
 | `app.js` | вся логика и отрисовка (обычный скрипт, без модулей) |
-| `styles.css` | стили; цвета — CSS-переменные на `:root` (голубая тема; оранжевая — `data-accent="orange"`; тёмная — `prefers-color-scheme` и `data-theme`) |
+| `styles.css` | стили; тема «Морозный фарфор» (кобальт и небесно-голубой, узоры гжели): цвета — CSS-переменные на `:root` (`--hero` — градиент ярких карточек, `--orn` — цвет узоров, `--serif` — шрифт заголовков); оранжевая — `data-accent="orange"`; тёмная — `prefers-color-scheme` и `data-theme` |
 | `sw.js` | service worker: сначала сеть (`cache: 'no-store'`), без сети — кэш; при новой версии страница перезагружается сама |
 | `manifest.webmanifest`, `icons/` | установка на экран «Домой» |
 | `server/` | сервер синхронизации (Python, без зависимостей) и файлы для установки — см. `server/README.md` |
 
 Версия меняется в трёх местах сразу: `APP_VERSION` (app.js), `CACHE` и `?v=` (sw.js), `?v=` (index.html).
 Номер версии виден внизу экрана настроек.
+
+## Оформление
+- Заголовки экранов — шрифт с засечками (`--serif`, на iPhone — встроенный New York, работает офлайн); под `.topbar` CSS сам рисует
+  узор-разделитель (`::before` — завиток через `mask`, `::after` — линии).
+- `.hero` — яркая карточка с градиентом `--hero`, фарфоровой каймой и гжельским цветком (`FLOWER` в app.js): итог месяца, «Всего» на «Счетах», сумма копилки.
+- Иконки счетов `ai:<ключ>` — `ACC_ICONS` (белый линейный рисунок 24×24), `accSVG(key, color)` рисует круг с градиентом из цвета счёта
+  (`shadeHex`); выбор — `accIconPicker()`. Палитра цветов счетов — `ACC_COLORS`.
+- Нижнее меню парит над экраном (`.tabbar`), иконки вкладок и кнопок в шапке — линейные SVG (`lineIco`).
+- Иконки категорий (эмодзи) — в кружке с оттенком цвета категории: `style="--c:<цвет>"` и правило `.ico[style*="--c:"]`.
 
 ## Отрисовка
 Без фреймворка: `render()` целиком пересобирает HTML из `state` и `ui`. События — делегирование по атрибутам:
@@ -27,7 +36,7 @@
 ```
 settings      { baseCurrency, theme, accent, sortCatsByUse, ratesUpdated, iconsV1, updatedAt }
 currencies    [{ code, name, symbol, decimals, perUSD }]           // perUSD — сколько единиц за 1 USD
-accounts      [{ id, name, currency, initial, icon, color, sort }] // icon: эмодзи или 'bi:<ключ>' (картинка банка/валюты)
+accounts      [{ id, name, currency, initial, icon, color, sort }] // icon: эмодзи, 'bi:<ключ>' (банк/валюта) или 'ai:<ключ>' (рисунок в цвете счёта)
 categories    [{ id, type: expense|income, name, icon, color, sort }]
 transactions  [{ id, type: expense|income|transfer|adjust, amount, accountId, toAccountId?, toAmount?,
                  categoryId?, date: 'YYYY-MM-DD', note, createdAt, recurringId?, recurDate? }]
