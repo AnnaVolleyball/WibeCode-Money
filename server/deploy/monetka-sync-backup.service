@@ -1,0 +1,9 @@
+# /etc/systemd/system/monetka-sync-backup.service — ежедневная копия базы (в ней только шифр)
+[Unit]
+Description=Monetka sync DB backup
+
+[Service]
+Type=oneshot
+User=anna
+Group=anna
+ExecStart=/bin/sh -c 'mkdir -p /srv/monetka-sync/data/backups && sqlite3 /srv/monetka-sync/data/sync.db ".backup /srv/monetka-sync/data/backups/sync-$(date +%%F).db" && find /srv/monetka-sync/data/backups -name "sync-*.db" -mtime +14 -delete'

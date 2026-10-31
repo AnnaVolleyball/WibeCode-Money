@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 15;
+const APP_VERSION = 16;
 
 /* ================= Data ================= */
 
@@ -176,6 +176,7 @@ function save() {
   stampChanges(state);
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
   catch (e) { toast('Не удалось сохранить: ' + e.message); }
+  scheduleSync();
 }
 
 // Что изменилось после момента since (для отправки на сервер)
@@ -644,8 +645,13 @@ function renderSettings() {
     <div class="section-title">Категории</div>
     <div class="btn-row"><button class="btn ghost" data-act="cats" data-v="expense">Расходы</button><button class="btn ghost" data-act="cats" data-v="income">Доходы</button></div>
 
+    <div class="section-title">Синхронизация</div>
+    <div class="list"><button class="row" data-act="sync-open">
+      <div class="ico" style="background:var(--card-2)">☁️</div>
+      <div class="mid"><div class="title">Синхронизация и копия на сервере</div><div class="sub">${esc(syncStatusText())}</div></div><span class="chev">›</span></button></div>
+
     <div class="section-title">Данные</div>
-    <div class="note-box">Все данные хранятся только на этом телефоне. Время от времени делайте резервную копию: файл можно сохранить в «Файлы» или Google Drive, а потом загрузить обратно.</div>
+    <div class="note-box">${syncCfg() ? 'Данные хранятся на телефоне, а зашифрованная копия — на вашем сервере.' : 'Все данные хранятся только на этом телефоне.'} Время от времени делайте резервную копию: файл можно сохранить в «Файлы» или Google Drive, а потом загрузить обратно.</div>
     <button class="btn" data-act="export">📤 Сохранить резервную копию</button>
     <button class="btn ghost" data-act="import">📥 Загрузить из файла</button>
     <button class="btn ghost" data-act="csv">📄 Экспорт в CSV (Excel)</button>
@@ -661,7 +667,7 @@ function closeSheet() { ui.sheet = null; render(); }
 
 function renderSheet() {
   const s = ui.sheet;
-  const body = { tx: sheetTx, acc: sheetAcc, cur: sheetCur, cats: sheetCats, cat: sheetCat, rec: sheetRec, adjust: sheetAdjust, vsnap: sheetVSnap, vacc: sheetVAcc, vset: sheetVSet, vgoal: sheetVGoal }[s.kind]();
+  const body = { tx: sheetTx, acc: sheetAcc, cur: sheetCur, cats: sheetCats, cat: sheetCat, rec: sheetRec, adjust: sheetAdjust, vsnap: sheetVSnap, vacc: sheetVAcc, vset: sheetVSet, vgoal: sheetVGoal, sync: sheetSync }[s.kind]();
   const anim = ui.sheetAnimated ? '' : ' anim';
   return `<div class="overlay${anim}" data-act="overlay"><div class="sheet${anim}"><div class="grab"></div>${body}</div></div>`;
 }
@@ -1868,6 +1874,278 @@ Object.assign(vaultActions, {
 Object.assign(vaultChanges, { 'vg-cur': v => { ui.sheet.currency = v; }, 'vg-deadline': v => { ui.sheet.deadline = v; } });
 Object.assign(vaultInputs, { 'vg-name': v => { ui.sheet.name = v; }, 'vg-target': v => { ui.sheet.target = v; } });
 
+/* ================= Синхронизация между устройствами =================
+   Сервер — только надёжная копия и обмен: приложение полностью работает без него.
+   Всё шифруется на телефоне ключом синхронизации до отправки (AES-GCM-256).
+   Ключ — 32 случайных символа; он есть только на устройствах Анны (и в «Паролях» iPhone).
+   Из ключа (HKDF-SHA256) получаются: ключ шифрования, ключ для обезличенных идентификаторов записей,
+   токен входа на сервер и номер «пространства». Сервер видит только rid, время изменения и шифр.
+   Настройки синхронизации — в localStorage['monetka-sync'], отдельно от данных (у каждого устройства свои). */
+
+const SYNC_KEY = 'monetka-sync';
+const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'; // Crockford: без I, L, O, U
+const SYNC_BATCH = 500;
+const sync = { busy: false, again: false, timer: null, error: '', keys: null, keysFor: '' };
+
+function syncCfg() { try { return JSON.parse(localStorage.getItem(SYNC_KEY) || 'null'); } catch (e) { return null; } }
+function syncSaveCfg(c) { try { if (c) localStorage.setItem(SYNC_KEY, JSON.stringify(c)); else localStorage.removeItem(SYNC_KEY); } catch (e) {} }
+
+function hex(buf) { return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join(''); }
+function b32enc(bytes) {
+  let bits = 0, val = 0, out = '';
+  for (const b of bytes) { val = (val << 8) | b; bits += 8; while (bits >= 5) { out += B32[(val >>> (bits - 5)) & 31]; bits -= 5; } }
+  if (bits) out += B32[(val << (5 - bits)) & 31];
+  return out;
+}
+function b32dec(str) {
+  let bits = 0, val = 0; const out = [];
+  for (const ch of str) { const i = B32.indexOf(ch); if (i < 0) return null; val = ((val << 5) | i) & 0xffff; bits += 5; if (bits >= 8) { out.push((val >>> (bits - 8)) & 255); bits -= 8; } }
+  return new Uint8Array(out);
+}
+// Ключ: 19 случайных байт + 1 байт проверки = 32 символа, группы по 4 через дефис
+async function syncKeyCheckByte(bytes) { return new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))[0]; }
+async function syncNewKey() {
+  const r = crypto.getRandomValues(new Uint8Array(19));
+  const all = new Uint8Array(20); all.set(r); all[19] = await syncKeyCheckByte(r);
+  return b32enc(all).match(/.{4}/g).join('-');
+}
+// Возвращает ключ в каноническом виде или null, если в нём ошибка
+async function syncNormKey(input) {
+  const s = String(input || '').toUpperCase().replace(/[OО]/g, '0').replace(/[ILІ]/g, '1').replace(/[^0-9A-Z]/g, '');
+  if (s.length !== 32) return null;
+  const bytes = b32dec(s);
+  if (!bytes || bytes.length !== 20) return null;
+  if (await syncKeyCheckByte(bytes.slice(0, 19)) !== bytes[19]) return null;
+  return s.match(/.{4}/g).join('-');
+}
+function syncNormServer(s) {
+  s = String(s || '').trim().replace(/\/+$/, '');
+  if (s && !/^https?:\/\//i.test(s)) s = 'https://' + s;
+  return s;
+}
+
+async function syncKeys(key) {
+  if (sync.keys && sync.keysFor === key) return sync.keys;
+  const raw = b32dec(key.replace(/-/g, ''));
+  const te = new TextEncoder();
+  const hk = await crypto.subtle.importKey('raw', raw, 'HKDF', false, ['deriveKey', 'deriveBits']);
+  const p = info => ({ name: 'HKDF', hash: 'SHA-256', salt: te.encode('monetka-sync-v1'), info: te.encode(info) });
+  sync.keys = {
+    enc: await crypto.subtle.deriveKey(p('monetka/enc'), hk, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']),
+    mac: await crypto.subtle.deriveKey(p('monetka/rid'), hk, { name: 'HMAC', hash: 'SHA-256', length: 256 }, false, ['sign']),
+    token: hex(await crypto.subtle.deriveBits(p('monetka/auth'), hk, 256)),
+    space: hex(await crypto.subtle.deriveBits(p('monetka/space'), hk, 128)),
+  };
+  sync.keysFor = key;
+  return sync.keys;
+}
+
+// Обезличенный идентификатор записи: сервер не видит ни тип, ни id
+async function syncRid(k, coll, id) {
+  return hex(await crypto.subtle.sign('HMAC', k.mac, new TextEncoder().encode(coll + '\n' + id))).slice(0, 32);
+}
+async function syncSeal(k, rid, ts, payload) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: new TextEncoder().encode(rid + ':' + ts) }, k.enc, new TextEncoder().encode(JSON.stringify(payload)));
+  return { rid, ts, blob: b64(iv) + '.' + b64(ct) };
+}
+async function syncOpen(k, it) {
+  const [iv, ct] = it.blob.split('.');
+  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(iv), additionalData: new TextEncoder().encode(it.rid + ':' + it.ts) }, k.enc, unb64(ct));
+  return JSON.parse(new TextDecoder().decode(plain));
+}
+
+// Изменения → зашифрованные записи. Удаление пишется в ту же запись, что и объект: побеждает более позднее.
+async function syncBuild(k, ch) {
+  const out = [];
+  for (const [coll, key] of Object.entries(SYNC_COLLS))
+    for (const o of ch.collections[coll]) out.push(await syncSeal(k, await syncRid(k, coll, o[key]), o.updatedAt || 0, { c: coll, o }));
+  for (const d of ch.deletions) if (SYNC_COLLS[d.coll]) out.push(await syncSeal(k, await syncRid(k, d.coll, d.id), d.deletedAt, { c: d.coll, d }));
+  if (ch.settings) out.push(await syncSeal(k, await syncRid(k, 'settings', ''), ch.settings.updatedAt || 0, { c: 'settings', o: ch.settings }));
+  if (ch.vaultUpdatedAt) out.push(await syncSeal(k, await syncRid(k, 'vault', ''), ch.vaultUpdatedAt, { c: 'vault', o: ch.vault }));
+  return out;
+}
+// Зашифрованные записи с сервера → формат applyRemote()
+async function syncUnpack(k, items) {
+  const ch = { collections: {}, deletions: [] };
+  for (const it of items) {
+    let p;
+    try { p = await syncOpen(k, it); } catch (e) { console.warn('sync: запись не расшифровалась', it.rid); continue; }
+    if (p.c === 'settings') ch.settings = p.o;
+    else if (p.c === 'vault') { ch.vault = p.o; ch.vaultUpdatedAt = it.ts; }
+    else if (!SYNC_COLLS[p.c]) continue;
+    else if (p.d) ch.deletions.push(p.d);
+    else (ch.collections[p.c] ||= []).push(p.o);
+  }
+  return ch;
+}
+
+async function syncPost(cfg, k, body) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 25000);
+  let r;
+  try {
+    r = await fetch(cfg.server + '/sync', { method: 'POST', signal: ctl.signal, cache: 'no-store',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + k.token }, body: JSON.stringify({ space: k.space, ...body }) });
+  } catch (e) { throw new Error('offline'); }
+  finally { clearTimeout(t); }
+  if (r.status === 401) throw new Error('Ключ не подходит к этому серверу');
+  if (r.status === 403) throw new Error('Сервер не принимает новые ключи');
+  if (r.status === 429) throw new Error('Слишком часто, попробуйте через минуту');
+  if (!r.ok) throw new Error('Ошибка сервера (' + r.status + ')');
+  return r.json();
+}
+
+// Скачать с сервера всё после cursor (без отправки)
+async function syncPullAll(cfg, k, since) {
+  const items = [];
+  let cursor = since, more = true;
+  while (more) {
+    const r = await syncPost(cfg, k, { since: cursor, push: [] });
+    if (r.reset) return { reset: true };
+    items.push(...r.items); cursor = r.cursor; more = r.more;
+  }
+  return { items, cursor };
+}
+
+function syncErrText(e) { return e.message === 'offline' ? 'Нет связи с сервером — данные сохранены на телефоне' : e.message; }
+
+// Полный обмен: отправить своё, получить чужое
+async function syncNow(manual) {
+  const cfg = syncCfg();
+  if (!cfg) return;
+  if (sync.busy) { sync.again = true; return; }
+  clearTimeout(sync.timer);
+  sync.busy = true; sync.error = '';
+  if (ui.sheet?.kind === 'sync') render();
+  let changed = 0;
+  try {
+    const k = await syncKeys(cfg.key);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const ch = changesSince(cfg.pushedAt || 0);
+      const recs = await syncBuild(k, ch);
+      let cursor = cfg.cursor || 0, i = 0, more = false, reset = false;
+      const incoming = [];
+      do {
+        const r = await syncPost(cfg, k, { since: cursor, push: recs.slice(i, i + SYNC_BATCH) });
+        if (r.reset) { reset = true; break; }
+        i += SYNC_BATCH; incoming.push(...r.items); cursor = r.cursor; more = r.more;
+      } while (i < recs.length || more);
+      if (reset) { cfg.cursor = 0; cfg.pushedAt = 0; continue; } // сервер начал с чистого листа — отправляем всё заново
+      changed = applyRemote(await syncUnpack(k, incoming));
+      cfg.cursor = cursor; cfg.pushedAt = ch.at - 1; cfg.lastOk = Date.now();
+      break;
+    }
+    syncSaveCfg(cfg);
+    if (manual) toast(changed ? `Синхронизировано, получено изменений: ${changed}` : 'Синхронизировано');
+  } catch (e) {
+    sync.error = syncErrText(e);
+    if (manual) toast(sync.error);
+  }
+  sync.busy = false;
+  if (changed && !ui.sheet) render();
+  else if (ui.sheet?.kind === 'sync' || ui.tab === 'settings') render();
+  if (sync.again) { sync.again = false; scheduleSync(1000); }
+}
+
+// После каждого сохранения — обмен через несколько секунд (несколько правок подряд уйдут одним запросом)
+function scheduleSync(ms = 4000) {
+  if (!syncCfg()) return;
+  clearTimeout(sync.timer);
+  sync.timer = setTimeout(() => syncNow(false), ms);
+}
+
+// Пустое состояние для подключения к уже существующим данным (чтобы не плодить копии стандартных категорий)
+function emptyState() {
+  const s = migrate({ ...defaultState(), currencies: [], accounts: [], categories: [] });
+  delete s.settings.updatedAt;
+  return s;
+}
+
+// Подключение этого устройства. key — уже проверенный ключ.
+async function syncConnect(server, key, isNew) {
+  const cfg = { server, key, cursor: 0, pushedAt: 0 };
+  const k = await syncKeys(key);
+  if (!isNew) {
+    const got = await syncPullAll(cfg, k, 0); // заодно проверяет адрес и ключ
+    const hasLocal = state.transactions.length > 0 || !!state.vault;
+    if (!got.reset && got.items.length) {
+      const replace = !hasLocal || confirm('На сервере уже есть данные Монетки.\n\nОК — заменить данные этого телефона данными с сервера (рекомендуется).\nОтмена — объединить: на сервер уйдут и записи этого телефона.');
+      if (replace) {
+        state = emptyState();
+        snapshot = takeSnapshot(state);
+        applyRemote(await syncUnpack(k, got.items));
+        cfg.pushedAt = Date.now(); cfg.cursor = got.cursor;
+      }
+    }
+  } else {
+    await syncPost(cfg, k, { since: 0, push: [] }); // проверка адреса; сервер создаёт пространство
+  }
+  syncSaveCfg(cfg);
+  await syncNow(false);
+}
+
+function syncStatusText() {
+  const cfg = syncCfg();
+  if (!cfg) return 'Выключена';
+  if (sync.busy) return 'Синхронизация…';
+  if (sync.error) return sync.error;
+  if (!cfg.lastOk) return 'Ещё не синхронизировано';
+  const d = new Date(cfg.lastOk);
+  return 'Последняя: ' + (dstr(d) === today() ? 'сегодня' : shortDate(dstr(d))) + ` в ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function sheetSync() {
+  const s = ui.sheet, cfg = syncCfg();
+  const head = `<div class="sheet-head"><span style="width:60px"></span><h2>Синхронизация</h2><button class="link" data-act="close">Готово</button></div>`;
+  if (cfg) return `${head}
+    <div class="note-box ${sync.error ? '' : 'remind'}">${sync.busy ? '🔄' : sync.error ? '⚠️' : '✅'} ${esc(syncStatusText())}</div>
+    <div class="field"><label>Сервер</label><input value="${esc(cfg.server)}" readonly></div>
+    <div class="field"><label>Ключ</label><input value="••••-••••-••••-••••" readonly></div>
+    ${s.show ? `<div class="sync-key">${esc(cfg.key)}</div>` : ''}
+    <div class="btn-row"><button class="btn ghost" data-act="sync-show">${s.show ? 'Скрыть ключ' : 'Показать ключ'}</button><button class="btn ghost" data-act="sync-copy">Скопировать ключ</button></div>
+    <button class="btn" data-act="sync-now" ${sync.busy ? 'disabled' : ''}>🔄 Синхронизировать сейчас</button>
+    <div class="note-box" style="margin-top:12px">Чтобы подключить другой телефон или компьютер: откройте там Монетку → Настройки → Синхронизация и введите этот адрес и ключ. Без ключа данные с сервера прочитать невозможно — храните его в «Паролях».</div>
+    <button class="btn danger" data-act="sync-off">Отключить на этом устройстве</button>`;
+  return `${head}
+    <div class="note-box">Монетка работает и без интернета. Синхронизация хранит <b>зашифрованную</b> копию на вашем сервере и обменивается изменениями между устройствами. Расшифровать её можно только ключом, который есть лишь у вас.</div>
+    <form data-submit="sync-connect" autocomplete="on">
+      <div class="field"><label>Сервер</label><input name="username" autocomplete="username" inputmode="url" autocapitalize="off" spellcheck="false" placeholder="https://…" value="${esc(s.server)}" data-input="sync-server"></div>
+      <div class="field"><label>Ключ</label><input type="password" name="password" autocomplete="${s.created ? 'new-password' : 'current-password'}" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-…" value="${esc(s.key)}" data-input="sync-key" style="font-family:ui-monospace,monospace;font-size:14px"></div>
+      ${s.created ? `<div class="sync-key">${esc(s.key)}</div><div class="note-box remind">🔑 Это новый ключ. <b>Сохраните его</b>: после «Подключить» iPhone предложит сохранить его в «Пароли». Без ключа зашифрованную копию не открыть.</div>` : ''}
+      <button class="btn" type="submit" ${s.busy ? 'disabled' : ''}>${s.busy ? 'Подключаю…' : 'Подключить'}</button>
+    </form>
+    ${s.created ? '' : `<div class="note-box" style="margin-top:12px">Первое устройство? Создайте ключ. Уже есть ключ с другого устройства — введите его выше.</div>
+    <button class="btn ghost" data-act="sync-create">🔑 Создать новый ключ</button>`}`;
+}
+
+const syncActions = {
+  'sync-open': () => openSheet({ kind: 'sync', server: '', key: '', created: false, show: false, busy: false }),
+  'sync-create': async () => { ui.sheet.key = await syncNewKey(); ui.sheet.created = true; render(); },
+  'sync-show': () => { ui.sheet.show = !ui.sheet.show; render(); },
+  'sync-copy': async () => { try { await navigator.clipboard.writeText(syncCfg().key); toast('Ключ скопирован'); } catch (e) { toast('Не удалось скопировать'); } },
+  'sync-now': () => syncNow(true),
+  'sync-off': () => {
+    if (!confirm('Отключить синхронизацию на этом устройстве? Данные на телефоне и на сервере останутся.')) return;
+    syncSaveCfg(null); sync.error = ''; render(); toast('Синхронизация отключена');
+  },
+};
+const syncInputs = { 'sync-server': v => { ui.sheet.server = v; }, 'sync-key': v => { ui.sheet.key = v; } };
+const syncSubmits = {
+  'sync-connect': async () => {
+    const s = ui.sheet;
+    const server = syncNormServer(s.server);
+    if (!/^https:\/\/[^/]+|^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?/.test(server)) return toast('Введите адрес сервера (https://…)');
+    const key = await syncNormKey(s.key);
+    if (!key) return toast('В ключе ошибка — проверьте его');
+    s.busy = true; render();
+    try { await syncConnect(server, key, s.created); ui.sheet = { kind: 'sync', show: false }; toast('Синхронизация включена'); }
+    catch (e) { toast(syncErrText(e)); }
+    if (ui.sheet) ui.sheet.busy = false;
+    render();
+  },
+};
+
 /* ================= Events ================= */
 
 const actions = {
@@ -1953,13 +2231,13 @@ const actions = {
   csv: () => exportCSV(),
   import: () => document.getElementById('importFile').click(),
   wipe: () => {
-    if (!confirm('Удалить ВСЕ данные с телефона? Сначала лучше сохранить резервную копию.')) return;
+    if (!confirm(syncCfg() ? 'Удалить ВСЕ данные? Включена синхронизация — они удалятся и на сервере, и на других устройствах. Сначала лучше сохранить резервную копию.' : 'Удалить ВСЕ данные с телефона? Сначала лучше сохранить резервную копию.')) return;
     if (!confirm('Точно удалить? Это нельзя отменить.')) return;
     state = defaultState(); save(); render(); toast('Данные удалены');
   },
 };
 
-Object.assign(actions, recActions, adjActions, vaultActions);
+Object.assign(actions, recActions, adjActions, vaultActions, syncActions);
 
 const changes = {
   'base-cur': v => { state.settings.baseCurrency = v; save(); render(); },
@@ -1986,7 +2264,7 @@ const inputs = {
   'cat-name': v => { ui.sheet.name = v; },
 };
 
-Object.assign(inputs, recInputs, adjInputs, vaultInputs);
+Object.assign(inputs, recInputs, adjInputs, vaultInputs, syncInputs);
 
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]');
@@ -2030,11 +2308,16 @@ document.addEventListener('submit', e => {
   const f = e.target.closest('[data-submit]');
   if (!f) return;
   e.preventDefault();
-  vaultSubmits[f.dataset.submit]?.();
+  (vaultSubmits[f.dataset.submit] || syncSubmits[f.dataset.submit])?.();
 });
 // свернули приложение — закрываем копилку
 document.addEventListener('visibilitychange', () => { if (document.hidden && vault.data) { vaultLock(); if (ui.tab === 'vault') render(); } });
 document.addEventListener('visibilitychange', () => { if (!document.hidden && !ui.sheet) { const n = state.transactions.length; processAuto(); if (state.transactions.length !== n) render(); } });
+// синхронизация: при открытии, при возвращении в приложение, при появлении сети и раз в 5 минут
+document.addEventListener('visibilitychange', () => { if (!document.hidden) scheduleSync(300); });
+window.addEventListener('online', () => scheduleSync(1000));
+setInterval(() => { if (!document.hidden) syncNow(false); }, 5 * 60 * 1000);
+scheduleSync(800);
 if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => reg.update()).catch(() => {});

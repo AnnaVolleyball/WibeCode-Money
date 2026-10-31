@@ -1,0 +1,32 @@
+# /etc/systemd/system/monetka-sync.service — сервер синхронизации Монетки
+[Unit]
+Description=Monetka sync server
+After=network.target
+
+[Service]
+User=anna
+Group=anna
+WorkingDirectory=/srv/monetka-sync
+Environment=MONETKA_HOST=127.0.0.1
+Environment=MONETKA_PORT=8787
+Environment=MONETKA_DB=/srv/monetka-sync/data/sync.db
+# необязательные настройки (MONETKA_NEW_SPACES, MONETKA_MAX_SPACES, MONETKA_ORIGINS) — в этом файле
+EnvironmentFile=-/srv/monetka-sync/.env
+ExecStart=/usr/bin/python3 -u /srv/monetka-sync/sync_server.py
+Restart=on-failure
+RestartSec=3
+MemoryMax=128M
+# защита: сервис видит только свою папку с данными
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+ReadWritePaths=/srv/monetka-sync/data
+
+[Install]
+WantedBy=multi-user.target

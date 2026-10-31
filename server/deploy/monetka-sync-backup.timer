@@ -1,0 +1,10 @@
+# /etc/systemd/system/monetka-sync-backup.timer
+[Unit]
+Description=Daily Monetka sync DB backup
+
+[Timer]
+OnCalendar=*-*-* 04:17:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
