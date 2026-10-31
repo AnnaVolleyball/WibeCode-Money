@@ -1,8 +1,9 @@
 # Как устроена Монетка
 
 Статическое веб-приложение (PWA) без сборки и зависимостей. Работает офлайн, все данные хранятся на телефоне.
-Публикуется через GitHub Pages из ветки `claude/money-plus-hardcoding-miicnd`:
-https://annavolleyball.github.io/WibeCode-Money/
+Публикуется через GitHub Pages из ветки `claude/money-plus-hardcoding-miicnd` на своём домене
+**https://monetka.lav11.com** (файл `CNAME`; старый адрес annavolleyball.github.io/WibeCode-Money перенаправляет сюда).
+Данные на iPhone привязаны к адресу: при смене адреса данные переносятся синхронизацией (или файлом копии).
 
 ## Файлы
 | Файл | Что внутри |
