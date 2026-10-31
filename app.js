@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 18;
+const APP_VERSION = 19;
 
 /* ================= Data ================= */
 

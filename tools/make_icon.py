@@ -31,7 +31,7 @@ def floret(x, y, s, rot, fill, center):
     out = ''
     for i in range(4):
         out += (f'<path d="{PETAL}" transform="translate({f(x)} {f(y)}) rotate({f(rot + i * 90)}) scale({f(s)})" '
-                f'fill="{fill}" stroke="#fff" stroke-opacity=".75" stroke-width="{f(1.2 / s)}" stroke-linejoin="round"/>')
+                f'fill="{fill}" stroke="#fff" stroke-opacity=".85" stroke-width="{f(1.2 / s)}" stroke-linejoin="round"/>')
     return out + f'<circle cx="{f(x)}" cy="{f(y)}" r="{f(s * .13)}" fill="{center}"/>'
 
 
@@ -61,7 +61,8 @@ def leaf(x, y, ln, rot):
 
 
 def icon_svg():
-    pal = ['#7f8ff0', '#9aa3ff', '#b3b0ff', '#c6cdff', '#dbe6ff', '#f2f6ff']  # от дальних к ближним
+    # только голубые оттенки, от дальних (насыщенные, плотные) к ближним (почти белые)
+    pal = ['#5f86f2', '#7b9df8', '#9bb6fc', '#bacdff', '#d8e5ff', '#f3f7ff']
     return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" width="180" height="180">
 <defs>
 <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0e28aa"/><stop offset=".55" stop-color="#1a4fea"/><stop offset="1" stop-color="#10a4ff"/></linearGradient>
@@ -72,7 +73,7 @@ def icon_svg():
 <rect width="180" height="180" fill="url(#bg)"/><circle cx="90" cy="76" r="84" fill="url(#hl)"/>
 <ellipse cx="92" cy="136" rx="62" ry="16" fill="url(#sh)"/>
 {leaf(62, 126, 50, 152)}{leaf(116, 128, 46, 32)}{leaf(90, 134, 40, 96)}
-{cluster(90, 80, 50, 23, pal, '#6a6fd8')}
+{cluster(90, 80, 50, 11, pal, '#4f6fdc')}
 </svg>
 '''
 
