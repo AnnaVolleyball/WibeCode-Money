@@ -62,15 +62,14 @@ def leaf(x, y, ln, rot):
 
 
 def icon_svg():
-    # фон и кайма — как у яркой карточки (--hero), гортензия — как FLOWER, листья целиком
+    # фон — как у яркой карточки (--hero), гортензия — как FLOWER, на весь квадрат; без рамки (на iPhone она выглядит как картинка в картинке)
     return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" width="180" height="180">
 <defs>
 <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0e28aa"/><stop offset=".48" stop-color="#1a4fea"/><stop offset="1" stop-color="#10a4ff"/></linearGradient>
 </defs>
 <rect width="180" height="180" fill="url(#bg)"/>
-<rect x="9" y="9" width="162" height="162" rx="32" fill="none" stroke="#fff" stroke-opacity=".38" stroke-width="1.6"/>
-{leaf(66, 120, 38, 140)}{leaf(111, 123, 34, 52)}
-{cluster(90, 76, 44, 7)}
+{leaf(62, 126, 44, 140)}{leaf(116, 129, 40, 52)}
+{cluster(90, 78, 50, 7)}
 </svg>
 '''
 
