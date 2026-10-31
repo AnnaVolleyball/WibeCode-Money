@@ -315,7 +315,11 @@ body { background: var(--bg-grad) no-repeat, var(--bg); }
 /* Яркая карточка-«льдинка» с фарфоровой каймой и цветком */
 .hero { position: relative; overflow: hidden; border-radius: 26px; padding: 18px 18px 16px; margin-bottom: 14px; color: #fff; background: var(--hero); box-shadow: var(--hero-shadow); }
 .hero::after { content: ""; position: absolute; inset: 6px; border-radius: 21px; border: 1px solid rgba(255, 255, 255, .38); pointer-events: none; }
-.hero .flower { position: absolute; right: -26px; top: -26px; width: 150px; height: 150px; color: rgba(255, 255, 255, .34); pointer-events: none; }
+.hero .flower { position: absolute; right: -6px; top: -16px; width: 132px; height: 132px; pointer-events: none; }
+.hero .flower .pt { fill: rgba(255, 255, 255, .08); stroke: rgba(255, 255, 255, .42); stroke-width: 1; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.hero .flower .ct { fill: rgba(255, 255, 255, .5); }
+.hero .flower .lf { fill: rgba(255, 255, 255, .05); stroke: rgba(255, 255, 255, .42); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.hero .flower .vn { fill: none; stroke: rgba(255, 255, 255, .34); stroke-width: .8; vector-effect: non-scaling-stroke; stroke-linecap: round; }
 .hero .label { font-size: 11.5px; letter-spacing: 1.3px; text-transform: uppercase; color: rgba(255, 255, 255, .82); position: relative; }
 .hero .big { font-family: var(--serif); font-size: 36px; font-weight: 600; letter-spacing: -.5px; margin: 2px 0 12px; position: relative; word-break: break-word; }
 .hero .pills { display: flex; gap: 10px; position: relative; }

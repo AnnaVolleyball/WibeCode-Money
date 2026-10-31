@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 17;
+const APP_VERSION = 18;
 
 /* ================= Data ================= */
 
@@ -389,12 +389,29 @@ function monthSwitch() {
 
 const lineIco = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 
-// Гжельский цветок — узор на яркой карточке
-const FLOWER = `<svg class="flower" viewBox="0 0 100 100" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.6">
-  <path d="M50 50C38 30 44 12 50 6c6 6 12 24 0 44ZM50 50c20-12 38-6 44 0-6 6-24 12-44 0ZM50 50c12 20 6 38 0 44-6-6-12-24 0-44ZM50 50C30 62 12 56 6 50c6-6 24-12 44 0Z"/>
-  <path d="M50 50c6-14 20-20 28-28M50 50c14 6 20 20 28 28M50 50c-6 14-20 20-28 28M50 50c-14-6-20-20-28-28"/>
-  <circle cx="78" cy="22" r="3"/><circle cx="78" cy="78" r="3"/><circle cx="22" cy="78" r="3"/><circle cx="22" cy="22" r="3"/></g>
-  <circle cx="50" cy="50" r="5" fill="currentColor"/></svg>`;
+// Гортензия — узор на яркой карточке: соцветие из 4-лепестковых цветков и листья, белыми линиями.
+// Тот же алгоритм рисует иконку приложения (tools/make_icon.py), поэтому числа здесь и там одинаковые.
+const FLOWER = (() => {
+  let seed = 7;
+  const r = () => (seed = (seed * 16807) % 2147483647, (seed - 1) / 2147483646);
+  const f = n => +n.toFixed(2);
+  const PETAL = 'M0 0C-.55-.18-.62-.78-.3-.98C-.12-1.08.12-1.08.3-.98C.62-.78.55-.18 0 0Z';
+  const leaf = (x, y, l, rot) => `<g transform="translate(${x} ${y}) rotate(${rot})"><path class="lf" d="M0 0C${f(l * .35)} ${f(-l * .28)} ${f(l * .8)} ${f(-l * .22)} ${l} 0C${f(l * .8)} ${f(l * .22)} ${f(l * .35)} ${f(l * .28)} 0 0Z"/>`
+    + `<path class="vn" d="M${f(l * .05)} 0H${f(l * .9)}M${f(l * .3)} 0l${f(l * .14)} ${f(-l * .12)}M${f(l * .5)} 0l${f(l * .14)} ${f(-l * .11)}M${f(l * .3)} 0l${f(l * .14)} ${f(l * .12)}M${f(l * .5)} 0l${f(l * .14)} ${f(l * .11)}"/></g>`;
+  const pts = [[0, 0]];
+  for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2 + .3; pts.push([Math.cos(a) * .52, Math.sin(a) * .5]); }
+  for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2 + .1; pts.push([Math.cos(a) * .98, Math.sin(a) * .9]); }
+  pts.sort((a, b) => (a[1] + a[0] * .1) - (b[1] + b[0] * .1));
+  const R = 34, cx = 50, cy = 46;
+  let fl = '';
+  for (const [px, py] of pts) {
+    const x = cx + (px + (r() - .5) * .12) * R, y = cy + (py + (r() - .5) * .12) * R;
+    const sc = R * (.44 + .1 * (py + 1) / 2 + (r() - .5) * .06), rot = r() * 90;
+    for (let i = 0; i < 4; i++) fl += `<path class="pt" d="${PETAL}" transform="translate(${f(x)} ${f(y)}) rotate(${f(rot + i * 90)}) scale(${f(sc)})"/>`;
+    fl += `<circle class="ct" cx="${f(x)}" cy="${f(y)}" r="${f(sc * .13)}"/>`;
+  }
+  return `<svg class="flower" viewBox="0 0 100 100" aria-hidden="true">${leaf(30, 74, 34, 140)}${leaf(66, 80, 30, 62)}${fl}</svg>`;
+})();
 
 function accountChips() {
   return `<div class="chips">
