@@ -315,7 +315,7 @@ body { background: var(--bg-grad) no-repeat, var(--bg); }
 /* Яркая карточка-«льдинка» с фарфоровой каймой и цветком */
 .hero { position: relative; overflow: hidden; border-radius: 26px; padding: 18px 18px 16px; margin-bottom: 14px; color: #fff; background: var(--hero); box-shadow: var(--hero-shadow); }
 .hero::after { content: ""; position: absolute; inset: 6px; border-radius: 21px; border: 1px solid rgba(255, 255, 255, .38); pointer-events: none; }
-.hero .flower { position: absolute; right: -6px; top: -16px; width: 132px; height: 132px; pointer-events: none; }
+.hero .flower { position: absolute; right: 10px; top: 8px; width: 112px; height: 112px; overflow: visible; pointer-events: none; }
 .hero .flower .pt { fill: rgba(255, 255, 255, .08); stroke: rgba(255, 255, 255, .42); stroke-width: 1; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
 .hero .flower .ct { fill: rgba(255, 255, 255, .5); }
 .hero .flower .lf { fill: rgba(255, 255, 255, .05); stroke: rgba(255, 255, 255, .42); stroke-width: 1; vector-effect: non-scaling-stroke; }

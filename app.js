@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 19;
+const APP_VERSION = 20;
 
 /* ================= Data ================= */
 
@@ -402,7 +402,7 @@ const FLOWER = (() => {
   for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2 + .3; pts.push([Math.cos(a) * .52, Math.sin(a) * .5]); }
   for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2 + .1; pts.push([Math.cos(a) * .98, Math.sin(a) * .9]); }
   pts.sort((a, b) => (a[1] + a[0] * .1) - (b[1] + b[0] * .1));
-  const R = 34, cx = 50, cy = 46;
+  const R = 30, cx = 50, cy = 42;
   let fl = '';
   for (const [px, py] of pts) {
     const x = cx + (px + (r() - .5) * .12) * R, y = cy + (py + (r() - .5) * .12) * R;
@@ -410,7 +410,7 @@ const FLOWER = (() => {
     for (let i = 0; i < 4; i++) fl += `<path class="pt" d="${PETAL}" transform="translate(${f(x)} ${f(y)}) rotate(${f(rot + i * 90)}) scale(${f(sc)})"/>`;
     fl += `<circle class="ct" cx="${f(x)}" cy="${f(y)}" r="${f(sc * .13)}"/>`;
   }
-  return `<svg class="flower" viewBox="0 0 100 100" aria-hidden="true">${leaf(30, 74, 34, 140)}${leaf(66, 80, 30, 62)}${fl}</svg>`;
+  return `<svg class="flower" viewBox="0 0 100 100" aria-hidden="true">${leaf(38, 68, 24, 140)}${leaf(62, 70, 22, 52)}${fl}</svg>`;
 })();
 
 function accountChips() {
